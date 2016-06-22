@@ -18,7 +18,7 @@ class Scope(object):
 
 
 class Const(Scope):
-    """Constant scope.
+    """Lazy constant scope.
 
     Factory will be invocated on initial dependency requirement.
     Subsequent requirements will return the same value."""

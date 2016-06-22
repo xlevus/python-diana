@@ -3,10 +3,16 @@ Python-Diana
 A simple dependency injection framework for python.
 
 Examples and usage
-==================
+------------------
+
+.. toctree::
+   :maxdepth: 2
+
+   api
+
 
 Simple Example
---------------
+^^^^^^^^^^^^^^
 
 .. code-block:: python
 
@@ -49,7 +55,7 @@ You can also decorate factories:
        return "FactoryValue"
 
 Aliases
--------
+^^^^^^^
 
 You might not want to have to handle importing of 'loose' objects.
 Diana supports aliases for provided dependencies.
@@ -71,7 +77,7 @@ Diana supports aliases for provided dependencies.
 
 
 Contextual Overrides
---------------------
+^^^^^^^^^^^^^^^^^^^^
 
 In some situations, you may not want to use the default value for a
 given dependency (e.g. testing). You can override the default
@@ -100,7 +106,7 @@ temporarily like so:
 
 
 Scopes
-------
+^^^^^^
 
 The lifecycle of provided dependencies can be managed with scopes. A few
 scopes are shipped with Diana by default.

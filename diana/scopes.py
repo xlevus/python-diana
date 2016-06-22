@@ -3,7 +3,10 @@ class Scope(object):
     """Default scope.
 
     If dependency is provided via a factory, the factory is
-    called on each invocation."""
+    called on each invocation.
+
+    :param factory: A factory method.
+    :param value: A constant value."""
     def __init__(self, factory=None, value=None):
         self.factory = factory
         self.value = value

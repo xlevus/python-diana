@@ -10,8 +10,7 @@ NONE = Scope(value=None)
 class Injector(object):
     """Provides lazy-evaluation dependency injection.
 
-    Dependencies can have their lifecycle managed via various
-    :py:class:`Scope`s, and be temporarily overidden with :py:meth:`override`.
+    >>> injector = Injector()
     """
     def __init__(self):
         self.providers = {}
@@ -20,16 +19,16 @@ class Injector(object):
 
     def provide(self, feature, factory=None, value=None, aliases=(),
                 scope=Scope):
-        """Registers `factory` or `value` to be injected against `feature`
+        """Registers ``factory`` or ``value`` to be injected against ``feature``
 
         :param feature: A hashable object to indicate the required dependency.
         :param factory: (Optional) A callable object that provides the
             dependency.
             Factories will take precedence over values.
         :param value: (Optional) The value of the dependency itself.
-        :param scope: (Optional) `Scope` subclass to define the lifecycle of the
-            dependency. If `factory` or `value` are None, this can also be a
-            `Scope` instance. Default: :py:class:`Scope`.
+        :param scope: (Optional) ``Scope`` subclass to define the lifecycle of the
+            dependency. If ``factory`` or ``value`` are None, this can also be a
+            ``Scope`` instance. Default: :py:class:``diana.scopes.Scope``.
         :param aliases: A tuple of hashable aliases that this dependency can
             also be requested via.
         """
@@ -52,20 +51,14 @@ class Injector(object):
 
     @contextmanager
     def override(self, feature, factory=None, value=None, scope=Scope):
-        """Context manager to override `feature` with `factory`, `value` or
-        `scope`.
+        """Context manager to override ``feature`` with ``factory``, ``value`` or
+        ``scope``.
 
-        You are not able to provide aditional aliases with `override`, but
+        You are not able to provide aditional aliases with ``override``, but
         all previously define aliases will also provide the temporary values.
 
         .. caution:: This is not thread safe.
 
-        >>> injector = Injector()
-        >>> injector.provide('Feature', value='my value')
-        >>> @injector(x='Feature')
-        ... def foo(x):
-        ...     return x
-        ...
         >>> with injector.override('Feature', value='other value'):
         ...     foo()
         ...
@@ -81,38 +74,46 @@ class Injector(object):
         if not self.overrides[feature]:
             del self.overrides[feature]
 
-    def factory(self, feature, scope=Scope):
-        """Convenience factory decorator for `Injector.provide`.
+    def factory(self, feature, scope=Scope, aliases=()):
+        """Convenience factory decorator for ``Injector.provide``.
 
         :param feature: The feature to provide.
         :param scope: The scope to provide the feature in.
         """
         def _decorator(func):
-            self.provide(feature, factory=func, scope=scope)
+            self.provide(feature, factory=func, scope=scope, alises=())
             return func
         return _decorator
 
     def get(self, feature, soft=False, aliases=True):
-        """Get the value of `feature`.
+        """Get the value of ``feature``.
 
-        :param bool soft: If True, when no provider for `feature` can be
-            found, None will be returned. (Default: `False`).
+        :param bool soft: If True, when no provider for ``feature`` can be
+            found, None will be returned. (Default: ``False``).
         :param bool aliases: If True, aliases will be searched if no
             provider can be found.
         """
         return self._get_scope(feature, soft, aliases).get()
 
     def __call__(self, **kwargs):
-        """Alias of :py:method:`depends`."""
+        """Alias of :py:method:``depends``."""
         return self.depends(**kwargs)
 
     def depends(self, **kwargs):
-        """Wraps a function to inject keyword arguments.
+        """Wraps a function to inject dependencies keyword arguments.
+
+        If the keyword argument is already provided when the wrapped function
+        is called, the argument will not be overwritten.
         """
         return self._decorator(kwargs, False)
 
     def soft(self, **kwargs):
-        """Provides a function
+        """Wraps a function to softly inject dependencies as keyword arguments.
+        If a dependency provider can not be found, the value passed into the
+        keyword argument will be ``None``.
+
+        Like :py:func:`depends`, already passed in keyword arguments will not
+        be overwritten.
         """
         return self._decorator(kwargs, True)
 

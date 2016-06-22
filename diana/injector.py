@@ -2,22 +2,17 @@ from functools import wraps
 from contextlib import contextmanager
 from collections import defaultdict, deque
 
-
-class Scope(object):
-    def __init__(self, factory=None, value=None):
-        self.factory = factory
-        self.value = value
-
-    def get(self):
-        if self.factory:
-            return self.factory()
-        return self.value
-
+from .scopes import Scope
 
 NONE = Scope(value=None)
 
 
 class Injector(object):
+    """Provides lazy-evaluation dependency injection.
+
+    Dependencies can have their lifecycle managed via various
+    :py:class:`Scope`s, and be temporarily overidden with :py:meth:`override`.
+    """
     def __init__(self):
         self.providers = {}
         self.overrides = defaultdict(deque)  # This should be thread-local
@@ -25,6 +20,19 @@ class Injector(object):
 
     def provide(self, feature, factory=None, value=None, aliases=(),
                 scope=Scope):
+        """Registers `factory` or `value` to be injected against `feature`
+
+        :param feature: A hashable object to indicate the required dependency.
+        :param factory: (Optional) A callable object that provides the
+            dependency.
+            Factories will take precedence over values.
+        :param value: (Optional) The value of the dependency itself.
+        :param scope: (Optional) `Scope` subclass to define the lifecycle of the
+            dependency. If `factory` or `value` are None, this can also be a
+            `Scope` instance. Default: :py:class:`Scope`.
+        :param aliases: A tuple of hashable aliases that this dependency can
+            also be requested via.
+        """
 
         if feature in self.providers or feature in self.aliases:
             raise RuntimeError("Feature '{}' already provided".format(feature))
@@ -33,14 +41,37 @@ class Injector(object):
             if (alias in self.providers) or (alias in self.aliases):
                 raise RuntimeError("Alias '{}' laready provided".format(alias))
 
-        _scope = scope(factory=factory, value=value)
+        if factory:
+            scope = scope(factory=factory)
+        elif value:
+            scope = Scope(value=value)
 
-        self.providers[feature] = _scope
+        self.providers[feature] = scope
         for alias in aliases:
             self.aliases[alias] = feature
 
     @contextmanager
     def override(self, feature, factory=None, value=None, scope=Scope):
+        """Context manager to override `feature` with `factory`, `value` or
+        `scope`.
+
+        You are not able to provide aditional aliases with `override`, but
+        all previously define aliases will also provide the temporary values.
+
+        .. caution:: This is not thread safe.
+
+        >>> injector = Injector()
+        >>> injector.provide('Feature', value='my value')
+        >>> @injector(x='Feature')
+        ... def foo(x):
+        ...     return x
+        ...
+        >>> with injector.override('Feature', value='other value'):
+        ...     foo()
+        ...
+        'other_value'
+
+        """
         _scope = scope(factory=factory, value=value)
 
         self.overrides[feature].append(_scope)
@@ -49,6 +80,41 @@ class Injector(object):
 
         if not self.overrides[feature]:
             del self.overrides[feature]
+
+    def factory(self, feature, scope=Scope):
+        """Convenience factory decorator for `Injector.provide`.
+
+        :param feature: The feature to provide.
+        :param scope: The scope to provide the feature in.
+        """
+        def _decorator(func):
+            self.provide(feature, factory=func, scope=scope)
+            return func
+        return _decorator
+
+    def get(self, feature, soft=False, aliases=True):
+        """Get the value of `feature`.
+
+        :param bool soft: If True, when no provider for `feature` can be
+            found, None will be returned. (Default: `False`).
+        :param bool aliases: If True, aliases will be searched if no
+            provider can be found.
+        """
+        return self._get_scope(feature, soft, aliases).get()
+
+    def __call__(self, **kwargs):
+        """Alias of :py:method:`depends`."""
+        return self.depends(**kwargs)
+
+    def depends(self, **kwargs):
+        """Wraps a function to inject keyword arguments.
+        """
+        return self._decorator(kwargs, False)
+
+    def soft(self, **kwargs):
+        """Provides a function
+        """
+        return self._decorator(kwargs, True)
 
     def _get_scope(self, feature, soft=False, aliases=True):
         if feature in self.overrides:
@@ -63,12 +129,9 @@ class Injector(object):
             if soft:
                 _scope = NONE
             else:
-                raise RuntimeError()
+                raise RuntimeError("No ")
 
         return _scope
-
-    def get(self, feature, soft=False, aliases=True):
-        return self._get_scope(feature, soft, aliases).get()
 
     def _decorator(self, kwargs, soft):
         def _dec(func):
@@ -81,9 +144,3 @@ class Injector(object):
                 return func(*func_args, **func_kwargs)
             return _inner
         return _dec
-
-    def __call__(self, **kwargs):
-        return self._decorator(kwargs, False)
-
-    def soft(self, **kwargs):
-        return self._decorator(kwargs, True)

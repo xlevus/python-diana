@@ -54,6 +54,12 @@ html:
 	@echo
 	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
 
+gh-pages: html
+	cd $(BUILDDIR)/html
+	git add .
+	git commit -m "Autobuild"
+	git push origin gh-pages
+
 .PHONY: dirhtml
 dirhtml:
 	$(SPHINXBUILD) -b dirhtml $(ALLSPHINXOPTS) $(BUILDDIR)/dirhtml

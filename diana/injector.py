@@ -81,7 +81,7 @@ class Injector(object):
         :param scope: The scope to provide the feature in.
         """
         def _decorator(func):
-            self.provide(feature, factory=func, scope=scope, alises=())
+            self.provide(feature, factory=func, scope=scope, aliases=())
             return func
         return _decorator
 

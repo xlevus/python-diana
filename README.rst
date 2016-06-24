@@ -34,7 +34,7 @@ Simple Example
        return (fish, cat)
 
    # Soft injection, missing dependencies will be filled with `None`
-   @injector.soft(horse=MissingValue):
+   @injector.soft(horse=MissingValue)
    def bar(horse):
        return horse
 
@@ -50,7 +50,7 @@ You can also decorate factories:
 
    FactoryValue = object()
 
-   @injector.factory(FactoryValue):
+   @injector.factory(FactoryValue)
    def my_factory():
        return "FactoryValue"
 

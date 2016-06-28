@@ -121,7 +121,7 @@ scopes are shipped with Diana by default.
        time.sleep()
        return "FactoryValue"
 
-   @injector(fish='trout')
+   @injector(fish=FactoryValue)
    def foo(fish):
        return fish
 

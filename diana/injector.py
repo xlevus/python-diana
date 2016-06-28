@@ -139,9 +139,10 @@ class Injector(object):
             @wraps(func)
             def _inner(*func_args, **func_kwargs):
                 for kwarg in kwargs:
-                    dependency = kwargs[kwarg]
-                    value = self.get(dependency, soft)
-                    func_kwargs.setdefault(kwarg, value)
+                    if kwarg not in func_kwargs:
+                        dependency = kwargs[kwarg]
+                        value = self.get(dependency, soft)
+                        func_kwargs[kwarg] = value
                 return func(*func_args, **func_kwargs)
             return _inner
         return _dec

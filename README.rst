@@ -2,13 +2,6 @@ Python-Diana
 =================================
 A simple dependency injection framework for python.
 
-Examples and usage
-------------------
-
-.. toctree::
-   :maxdepth: 2
-
-   api
 
 
 Simple Example

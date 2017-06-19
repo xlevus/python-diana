@@ -6,7 +6,7 @@ from setuptools import setup
 
 setup(
     name='diana',
-    version='0.0.2',
+    version='0.0.3',
     description='Simple Dependency Injector for python',
     long_description='',
     author='Chris Targett',

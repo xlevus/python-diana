@@ -4,7 +4,7 @@ from collections import defaultdict, deque
 
 from .scopes import Scope
 
-NONE = Scope(value=None)
+NONE = Scope(None, value=None)
 
 
 class Injector(object):
@@ -41,9 +41,9 @@ class Injector(object):
                 raise RuntimeError("Alias '{}' laready provided".format(alias))
 
         if factory:
-            scope = scope(factory=factory)
+            scope = scope(feature, factory=factory)
         elif value:
-            scope = Scope(value=value)
+            scope = Scope(feature, value=value)
 
         self.providers[feature] = scope
         for alias in aliases:
@@ -65,7 +65,7 @@ class Injector(object):
         'other_value'
 
         """
-        _scope = scope(factory=factory, value=value)
+        _scope = scope(feature, factory=factory, value=value)
 
         self.overrides[feature].append(_scope)
         yield

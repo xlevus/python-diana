@@ -7,7 +7,7 @@ class Scope(object):
 
     :param factory: A factory method.
     :param value: A constant value."""
-    def __init__(self, factory=None, value=None):
+    def __init__(self, feature, factory=None, value=None):
         self.factory = factory
         self.value = value
 

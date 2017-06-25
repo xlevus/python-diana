@@ -1,6 +1,7 @@
 import pytest
 from mock import Mock
 
+from diana import NoProvider, DuplicateProvider
 
 
 def test_inject_value(injector):
@@ -51,7 +52,7 @@ def test_no_provider(injector):
     def inner(fish):
         assert fish == value
 
-    with pytest.raises(RuntimeError) as excinfo:
+    with pytest.raises(NoProvider) as excinfo:
         inner()
 
 
@@ -88,7 +89,7 @@ def test_duplicate_provider(injector):
 
     injector.provide(dependency, factory=factory)
 
-    with pytest.raises(RuntimeError) as excinfo:
+    with pytest.raises(DuplicateProvider) as excinfo:
         injector.provide(dependency, value=value)
 
 
@@ -99,5 +100,5 @@ def test_duplicate_aliases(injector):
     factory = Mock()
 
     injector.provide(dependency_a, factory=factory, aliases=('dependency',))
-    with pytest.raises(RuntimeError) as excinfo:
+    with pytest.raises(DuplicateProvider) as excinfo:
         injector.provide(dependency_b, factory=factory, aliases=('dependency',))

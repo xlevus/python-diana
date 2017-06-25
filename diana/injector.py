@@ -7,6 +7,14 @@ from .scopes import Scope
 NONE = Scope(None, value=None)
 
 
+class NoProvider(RuntimeError):
+    pass
+
+
+class DuplicateProvider(RuntimeError):
+    pass
+
+
 class Injector(object):
     """Provides lazy-evaluation dependency injection.
 
@@ -34,11 +42,11 @@ class Injector(object):
         """
 
         if feature in self.providers or feature in self.aliases:
-            raise RuntimeError("Feature '{}' already provided".format(feature))
+            raise DuplicateProvider("Feature '{}' already provided".format(feature))
 
         for alias in aliases:
             if (alias in self.providers) or (alias in self.aliases):
-                raise RuntimeError("Alias '{}' laready provided".format(alias))
+                raise DuplicateProvider("Alias '{}' laready provided".format(alias))
 
         if factory:
             scope = scope(feature, factory=factory)
@@ -130,7 +138,8 @@ class Injector(object):
             if soft:
                 _scope = NONE
             else:
-                raise RuntimeError("No ")
+                raise NoProvider(
+                    "No provider found for {!r}".format(feature))
 
         return _scope
 

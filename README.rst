@@ -9,16 +9,16 @@ Simple Example
 
 .. code-block:: python
 
-   from diana import injector
+   from diana import injector, Key
 
 
    def my_factory():
        return "FactoryValue"
 
-   FactoryValue = object()
+   FactoryValue = Key('FactoryValue')
    injector.provide(FactoryValue, factory=my_factory)
 
-   OtherValue = object()
+   OtherValue = 'OtherValue'  # dependency keys can be any hashable type.
    injector.provide(OtherValue, value="OtherValue")
 
    # Hard injection, provider must exist
@@ -41,11 +41,29 @@ You can also decorate factories:
 
    from diana import injector
 
-   FactoryValue = object()
+   FactoryValue = Key('FactoryValue')
 
    @injector.factory(FactoryValue)
    def my_factory():
        return "FactoryValue"
+
+
+Keys
+^^^^
+
+Keys are just a simple container around hashable types. Two keys with the same
+class and name will always be equal, and return the same hash.
+
+.. code-block:: python
+
+   class Clients(Key):
+       pass
+
+   IRC = Clients('irc')
+   IRC == Clients('irc')
+
+   Clients('irc') != Key('irc')
+
 
 Aliases
 ^^^^^^^
@@ -56,7 +74,7 @@ Diana supports aliases for provided dependencies.
 .. code-block:: python
 
    from diana import injector
-   FactoryValue = object()
+   FactoryValue = Key('FactoryValue')
 
    @injector.factory(FactoryValue, aliases=('FactoryValue', 'trout'))
    def my_factory():
@@ -80,7 +98,7 @@ temporarily like so:
 .. code-block:: python
 
    from diana import injector
-   FactoryValue = object()
+   FactoryValue = Key('FactoryValue')
 
    @injector.factory(FactoryValue)
    def my_factory():
@@ -107,7 +125,7 @@ scopes are shipped with Diana by default.
 .. code-block:: python
 
    from diana import injector, Const
-   FactoryValue = object()
+   FactoryValue = Key('FactoryValue')
 
    @injector.factory(FactoryValue, scope=Const)
    def my_factory():

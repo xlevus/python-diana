@@ -1,5 +1,5 @@
 from .injector import Injector, NoProvider, DuplicateProvider  # noqa
-from .scopes import Const  # noqa
+from .scopes import Const, Func  # noqa
 from .key import Key  # noqa
 
 

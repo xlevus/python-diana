@@ -93,7 +93,7 @@ class Injector(object):
             return func
         return _decorator
 
-    def get(self, feature, soft=False, aliases=True):
+    def get(self, feature, dependent=None, soft=False, aliases=True):
         """Get the value of ``feature``.
 
         :param bool soft: If True, when no provider for ``feature`` can be
@@ -101,7 +101,7 @@ class Injector(object):
         :param bool aliases: If True, aliases will be searched if no
             provider can be found.
         """
-        return self._get_scope(feature, soft, aliases).get()
+        return self._get_scope(feature, soft, aliases).get(dependent)
 
     def __call__(self, **kwargs):
         """Alias of :py:method:``depends``."""
@@ -150,7 +150,7 @@ class Injector(object):
                 for kwarg in kwargs:
                     if kwarg not in func_kwargs:
                         dependency = kwargs[kwarg]
-                        value = self.get(dependency, soft)
+                        value = self.get(dependency, func, soft=soft)
                         func_kwargs[kwarg] = value
                 return func(*func_args, **func_kwargs)
             return _inner

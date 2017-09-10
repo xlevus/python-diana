@@ -51,7 +51,7 @@ class TestInjector(object):
     def test_load_modules(self, modules):
         i = Injector()
         i.load(*modules)
-        assert i.modules == modules
+        assert i.context.modules == modules
 
     def test_providers(self, mymodule, othermodule):
         i = Injector()
@@ -108,3 +108,17 @@ class TestInjector(object):
             @injector
             def decorated(foo: FrobType):
                 return foo
+
+    def test_override(self, injector):
+        @injector
+        def frob(*, foo: FrobType):
+            return foo
+
+        class NewFrobber(Module):
+            def provide_frob(self) -> FrobType:
+                return FrobType(200)
+
+        with injector.override(NewFrobber()):
+            assert frob() == FrobType(200)
+
+        assert frob() == FrobType(1)

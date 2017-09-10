@@ -1,8 +1,6 @@
-from .injector import Injector, NoProvider, DuplicateProvider  # noqa
-from .scopes import Const, Func  # noqa
-from .key import Key  # noqa
+from .injector import Injector  # noqa
 
 
-__version__ = '0.0.4'
+__version__ = '0.1.0'
 
 injector = Injector()

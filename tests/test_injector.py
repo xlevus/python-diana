@@ -122,3 +122,22 @@ class TestInjector(object):
             assert frob() == FrobType(200)
 
         assert frob() == FrobType(1)
+
+    def test_module_with_deps(self):
+        injector = Injector()
+
+        class DepModule(Module):
+            def provide_frob(self, *, mytype: MyType) -> FrobType:
+                return FrobType(mytype)
+
+        class OtherModule(Module):
+            def provide_mytype(self) -> MyType:
+                return MyType(100)
+
+        @injector
+        def depends(*, frob: FrobType):
+            return frob
+
+        injector.load(DepModule(), OtherModule())
+
+        assert depends() == FrobType(100)

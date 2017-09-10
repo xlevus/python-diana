@@ -1,13 +1,13 @@
 import logging
+import inspect
 import typing as t
-from functools import wraps
-from contextlib import contextmanager
-from inspect import Signature, Parameter, getmembers
+import functools
 
 logger = logging.getLogger(__name__)
 
 
 T = t.TypeVar('T')
+Wrappable = t.Callable[..., t.Any]
 
 
 class NoProvider(RuntimeError):
@@ -21,11 +21,11 @@ class NoDependencies(RuntimeError):
 class Module(object):
     @property
     def providers(self) -> t.Generator[t.Tuple[t.Type, t.Any], None, None]:
-        for name, func in getmembers(self):
+        for name, func in inspect.getmembers(self):
             if not name.startswith('provide_'):
                 continue
 
-            signature = Signature.from_function(func)
+            signature = inspect.signature(func)
             yield (
                 signature.return_annotation,
                 func)
@@ -53,23 +53,25 @@ class Injector(object):
                     self._providers[feature] = provider
         return self._providers
 
-    def get(self, feature: t.Type):
+    def get(self, dependency: t.Type):
         try:
-            return self.providers[feature]()
+            return self.providers[dependency]()
         except KeyError:
-            raise NoProvider('No provider found for {!r}'.format(feature))
+            raise NoProvider('No provider found for {!r}'.format(dependency))
 
-    def __call__(self, func: t.Callable[..., t.Any]) -> t.Callable[..., t.Any]:
-        signature = Signature.from_function(func)
+    def wrap_func(self,
+                  func: Wrappable,
+                  explicit_bindings: t.Dict[str, t.Any]) -> Wrappable:
+        signature = inspect.signature(func)
         deps = {key: param
                 for key, param in signature.parameters.items()
-                if param.kind == param.KEYWORD_ONLY}
+                if param.kind == inspect.Parameter.KEYWORD_ONLY}
 
         if not deps:
             raise NoDependencies(
                 'Function {!r} has no keyword-only arguments'.format(func))
 
-        @wraps(func)
+        @functools.wraps(func)
         def _wrapper(*args, **kwargs):
             for key, param in deps.items():
 
@@ -77,13 +79,13 @@ class Injector(object):
                     # Kwarg already provided
                     continue
 
-                if param.annotation == Parameter.empty:
+                if param.annotation == inspect.Parameter.empty:
                     logger.debug("No annotation for {!r}".format(param))
 
                 try:
                     value = self.get(param.annotation)
                 except NoProvider:
-                    if param.default != Parameter.empty:
+                    if param.default != inspect.Parameter.empty:
                         value = param.default
                     else:
                         raise
@@ -93,3 +95,8 @@ class Injector(object):
             return func(*args, **kwargs)
 
         return _wrapper
+
+    def __call__(self, func: Wrappable = None, **kwargs: t.Any):
+        if func is None:
+            return functools.partial(self.__call__, **kwargs)
+        return self.wrap_func(func, kwargs)

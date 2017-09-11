@@ -1,4 +1,4 @@
-from .injector import Injector  # noqa
+from .injector import Injector, Module  # noqa
 
 
 __version__ = '3.0.0'

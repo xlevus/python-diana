@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import inspect
 import typing as t
@@ -87,7 +88,10 @@ class Injector(object):
     def load(self, *modules) -> None:
         self.context_stack[0].load(*modules)
 
-    def get(self, dependency: t.Type):
+    def get(
+            self,
+            dependency: t.Type,
+            default: t.Any = inspect.Parameter.empty):
         try:
             provider = self.providers[dependency]
             return self.provide_call(
@@ -97,6 +101,24 @@ class Injector(object):
                 {})
 
         except KeyError:
+            if default is not inspect.Parameter.empty:
+                return default
+            raise NoProvider('No provider found for {!r}'.format(dependency))
+
+    async def async_get(
+            self,
+            dependency: t.Type,
+            default: t.Any = inspect.Parameter.empty):
+        try:
+            provider = self.providers[dependency]
+            return await self.async_provide_call(
+                provider,
+                self.get_dependencies(provider, False),
+                (),
+                {})
+        except KeyError:
+            if default is not inspect.Parameter.empty:
+                return default
             raise NoProvider('No provider found for {!r}'.format(dependency))
 
     def get_dependencies(self,
@@ -112,6 +134,40 @@ class Injector(object):
                 'Function {!r} has no keyword-only arguments.'.format(func))
 
         return deps
+
+    async def async_provide_call(
+            self,
+            func: Wrappable,
+            dependencies: t.Optional[DependencyMap],
+            args: t.Tuple,
+            kwargs: t.Dict[str, t.Any]) -> T:
+
+        if dependencies is None:
+            dependencies = self.get_dependencies(func)
+
+        futures = {}
+
+        for key, param in dependencies.items():
+            if key in kwargs:
+                continue
+
+            value = self.async_get(
+                param.annotation,
+                default=param.default)
+
+            if asyncio.iscoroutine(value):
+                futures[key] = value
+            else:
+                kwargs[key] = value
+
+        for key, future in futures.items():
+            val = await future
+            kwargs[key] = val
+
+        result = func(*args, **kwargs)
+        if asyncio.iscoroutine(result):
+            result = await result
+        return result
 
     def provide_call(self,
                      func: Wrappable,
@@ -129,15 +185,7 @@ class Injector(object):
             if param.annotation == inspect.Parameter.empty:
                 logger.debug("No annotation for {!r}".format(param))
 
-            try:
-                value = self.get(param.annotation)
-            except NoProvider:
-                if param.default != inspect.Parameter.empty:
-                    value = param.default
-                else:
-                    raise
-
-            kwargs[key] = value
+            kwargs[key] = self.get(param.annotation, param.default)
 
         return func(*args, **kwargs)
 
@@ -146,9 +194,14 @@ class Injector(object):
                   explicit: t.Dict[str, t.Any]) -> Wrappable:
         deps = self.get_dependencies(func)
 
-        @functools.wraps(func)
-        def _wrapper(*args, **kwargs):
-            return self.provide_call(func, deps, args, kwargs)
+        if asyncio.iscoroutinefunction(func):
+            @functools.wraps(func)
+            async def _wrapper(*args, **kwargs):
+                return await self.async_provide_call(func, deps, args, kwargs)
+        else:
+            @functools.wraps(func)
+            def _wrapper(*args, **kwargs):
+                return self.provide_call(func, deps, args, kwargs)
 
         return _wrapper
 

@@ -8,6 +8,8 @@ LENGTH = 3
 INT_VALUE = 1
 STR_VALUE = 'x'
 
+pytestmark = pytest.mark.asyncio
+
 
 class ModuleSync(Module):
     @provider
@@ -19,14 +21,20 @@ class ModuleSync(Module):
         return STR_VALUE * length
 
 
-class AltModuleSync(Module):
+class ModuleAsync(Module):
     @provider
-    def provide_bool(self) -> bool:
-        return False
+    async def provide_int(self) -> int:
+        return INT_VALUE
+
+    @provider
+    async def provide_string(self, length: int) -> str:
+        return STR_VALUE * length
 
 
 @pytest.fixture(params=[
-    (ModuleSync,)
+    (ModuleSync,),
+    (ModuleAsync,),
+    (ModuleSync, ModuleAsync),
 ])
 def modules(request):
     return [
@@ -48,12 +56,12 @@ def injector(modules):
 def basic_injected_function(request, injector):
     if request.param == '__call__':
         @injector
-        def requires_int(*, an_int: int):
+        async def requires_int(*, an_int: int):
             return an_int
 
     elif request.param == 'inject':
         @injector.inject(an_int=int)
-        def requires_int(an_int):
+        async def requires_int(an_int):
             return an_int
 
     return requires_int
@@ -64,50 +72,25 @@ def parametrized_injected_function(request, injector):
     if request.param == '__call__':
         @injector
         @injector.param('a_str', length=LENGTH)
-        def requires_str(*, a_str: str):
+        async def requires_str(*, a_str: str):
             return a_str
 
     elif request.param == 'inject':
         @injector.inject(a_str=str)
         @injector.param('a_str', length=LENGTH)
-        def requires_str(a_str):
+        async def requires_str(a_str):
             return a_str
 
     return requires_str
 
 
-def test_basic(basic_injected_function):
+async def test_basic(basic_injected_function):
     assert isinstance(basic_injected_function, Injected)
 
-    assert basic_injected_function() == INT_VALUE
+    assert (await basic_injected_function()) == INT_VALUE
 
 
-def test_inject_param(parametrized_injected_function):
+async def test_inject_param(parametrized_injected_function):
     assert isinstance(parametrized_injected_function, Injected)
 
-    assert parametrized_injected_function() == STR_VALUE * LENGTH
-
-
-def test_module_dependencies(injector):
-
-    class DependentModule(Module):
-        @provider
-        @injector.inject(a_int=int)
-        def provide_float(self, a_int) -> float:
-            return float(a_int)
-
-    @injector.inject(a_float=float)
-    def requires_float(a_float):
-        return a_float
-
-    injector.load_module(DependentModule())
-
-    assert requires_float() == float(INT_VALUE)
-
-
-@pytest.mark.parametrize('modules', [
-    (AltModuleSync,),
-], indirect=True)
-def test_missing_dependency(injector, basic_injected_function):
-    with pytest.raises(RuntimeError):
-        basic_injected_function()
+    assert (await parametrized_injected_function()) == STR_VALUE * LENGTH

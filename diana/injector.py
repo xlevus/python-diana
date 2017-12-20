@@ -142,6 +142,10 @@ class Injected(object):
 
         return output
 
+    def __get__(self, obj, type=None):
+        # Get is required to support wrapping instance methods
+        return functools.partial(self, obj)
+
     def __call__(self, *args, **kwargs) -> t.Any:
         kwargs.update(self.resolve_dependencies(kwargs))
         return self.func(*args, **kwargs)

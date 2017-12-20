@@ -96,3 +96,36 @@ async def test_inject_param(parametrized_injected_function):
     assert isinstance(parametrized_injected_function, Injected)
 
     assert (await parametrized_injected_function()) == STR_VALUE * LENGTH
+
+
+async def test_instancemethod(injector):
+    class MyThing(object):
+        @injector
+        async def requires_int(self, *, an_int: int) -> int:
+            return self, an_int
+
+    thing = MyThing()
+
+    assert (await thing.requires_int()) == (thing, INT_VALUE)
+
+
+async def test_classmethod(injector):
+    class MyThing(object):
+        @classmethod
+        @injector
+        async def requires_int(cls, *, an_int: int) -> int:
+            return cls, an_int
+
+    thing = MyThing()
+    assert (await thing.requires_int()) == (MyThing, INT_VALUE)
+
+
+async def test_staticmethod(injector):
+    class MyThing(object):
+        @staticmethod
+        @injector
+        async def requires_int(*, an_int: int) -> int:
+            return an_int
+
+    thing = MyThing()
+    assert (await thing.requires_int()) == INT_VALUE

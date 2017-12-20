@@ -138,3 +138,36 @@ def test_module_unloading(injector):
     assert bool not in injector.providers
     assert str in injector.providers
     assert int in injector.providers
+
+
+def test_instancemethod(injector):
+    class MyThing(object):
+        @injector
+        def requires_int(self, *, an_int: int) -> int:
+            return self, an_int
+
+    thing = MyThing()
+
+    assert thing.requires_int() == (thing, INT_VALUE)
+
+
+def test_classmethod(injector):
+    class MyThing(object):
+        @classmethod
+        @injector
+        def requires_int(cls, *, an_int: int) -> int:
+            return cls, an_int
+
+    thing = MyThing()
+    assert thing.requires_int() == (MyThing, INT_VALUE)
+
+
+def test_staticmethod(injector):
+    class MyThing(object):
+        @staticmethod
+        @injector
+        def requires_int(*, an_int: int) -> int:
+            return an_int
+
+    thing = MyThing()
+    assert thing.requires_int() == INT_VALUE

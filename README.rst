@@ -1,7 +1,11 @@
 Python-Diana
 =================================
-A simple dependency injection framework for python.
+A simple async-friendly dependency injection framework for Python 3.
 
+Supports:
+ - Async methods
+ - Parametrized dependencies
+ - Type annotations
 
 
 Simple Example
@@ -9,115 +13,53 @@ Simple Example
 
 .. code-block:: python
 
-   from diana import injector
+   import diana
+
+   class MyThing(object):
+       def __init__(self, prefix):
+           self.prefix = prefix
+
+       def get(self, suffix):
+           return self.prefix + suffix
+
+   class MyModule(diana.Module):
+       @diana.provider
+       def provide_thing(self) -> MyThing:
+           return MyThing("a_prefix_")
 
 
-   def my_factory():
-       return "FactoryValue"
+   @diana.injector
+   def requires_a_thing(*, thing: MyThing):
+       return thing.get('suffix')
 
-   FactoryValue = object()
-   injector.provide(FactoryValue, factory=my_factory)
+   if __name__ == '__main__':
+       diana.injector.load_module(MyModule())
 
-   OtherValue = object()
-   injector.provide(OtherValue, value="OtherValue")
-
-   # Hard injection, provider must exist
-   @injector(fish=FactoryValue, cat=OtherValue)
-   def foo(fish=None, cat=None):
-       return (fish, cat)
-
-   # Soft injection, missing dependencies will be filled with `None`
-   @injector.soft(horse=MissingValue)
-   def bar(horse):
-       return horse
-
-   foo()  # Returns `('FactoryValue', 'OtherValue')`
-   bar()  # Returns `None`
+       requires_a_thing()  # returns "a_prefix_suffix"
 
 
-You can also decorate factories:
-
-.. code-block:: python
-
-   from diana import injector
-
-   FactoryValue = object()
-
-   @injector.factory(FactoryValue)
-   def my_factory():
-       return "FactoryValue"
-
-Aliases
-^^^^^^^
-
-You might not want to have to handle importing of 'loose' objects.
-Diana supports aliases for provided dependencies.
+Parametrized Dependencies
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 
-   from diana import injector
-   FactoryValue = object()
+   import diana
+   import typing
 
-   @injector.factory(FactoryValue, aliases=('FactoryValue', 'trout'))
-   def my_factory():
-       return "FactoryValue"
+   Snake = typing.NewType('Snake', str)
 
-   @injector(fish='trout')
-   def foo(fish):
-       return fish
-
-   foo()  # Returns "FactoryValue"
+   class SnakeModule(diana.Module):
+       @diana.provider
+       def provide_snake(self, length: int) -> Snake:
+           return Snake('-' + ('=' * length) + e)
 
 
-Contextual Overrides
-^^^^^^^^^^^^^^^^^^^^
+   @diana.inject(a_snake=Snake)
+   @diana.param('a_snake', length=5)
+   def snake_printer(a_snake):
+       print(a_snake, "Hissss")
 
-In some situations, you may not want to use the default value for a
-given dependency (e.g. testing). You can override the default
-temporarily like so:
+   if __name__ == '__main__':
+       diana.injector.load_module(SnakeModule())
 
-
-.. code-block:: python
-
-   from diana import injector
-   FactoryValue = object()
-
-   @injector.factory(FactoryValue)
-   def my_factory():
-       return "FactoryValue"
-
-   @injector(fish='trout')
-   def foo(fish):
-       return fish
-
-   with injector.override(FactoryValue, factory=lambda: "Other"):
-       foo()  # Returns "Other"
-
-   foo()  # Returns "FactoryValue"
-
-.. caution:: Contextual overrides are not thread safe.
-
-
-Scopes
-^^^^^^
-
-The lifecycle of provided dependencies can be managed with scopes. A few
-scopes are shipped with Diana by default.
-
-.. code-block:: python
-
-   from diana import injector, Const
-   FactoryValue = object()
-
-   @injector.factory(FactoryValue, scope=Const)
-   def my_factory():
-       time.sleep()
-       return "FactoryValue"
-
-   @injector(fish=FactoryValue)
-   def foo(fish):
-       return fish
-
-   foo()
-   foo()  # `my_factory` is not called a second time.
-
+       snake_printer() # Prints: -=====e Hissss

@@ -9,6 +9,23 @@ INT_VALUE = 1
 STR_VALUE = 'x'
 
 
+def assert_wrapped(wrapped_func):
+    source_func = wrapped_func.__wrapped__
+
+    assert wrapped_func.__doc__ == source_func.__doc__
+    assert wrapped_func.__name__ == source_func.__name__
+
+    # TODO: Determine if this is really needed
+    assert wrapped_func.__code__ == source_func.__code__
+
+    if hasattr(source_func, '__module__'):
+        assert wrapped_func.__module__ == source_func.__module__
+
+    if hasattr(source_func, '__annotations__'):
+        assert wrapped_func.__annotations__ == source_func.__annotations__
+
+
+
 class ModuleSync(Module):
     @provider
     def provide_int(self) -> int:
@@ -49,11 +66,13 @@ def basic_injected_function(request, injector):
     if request.param == '__call__':
         @injector
         def requires_int(*, an_int: int):
+            """I require an int"""
             return an_int
 
     elif request.param == 'inject':
         @injector.inject(an_int=int)
         def requires_int(an_int):
+            """I require an int"""
             return an_int
 
     return requires_int
@@ -65,30 +84,33 @@ def parametrized_injected_function(request, injector):
         @injector
         @injector.param('a_str', length=LENGTH)
         def requires_str(*, a_str: str):
+            """I require a str"""
             return a_str
 
     elif request.param == 'inject':
         @injector.inject(a_str=str)
         @injector.param('a_str', length=LENGTH)
         def requires_str(a_str):
+            """I require a str"""
             return a_str
 
     elif request.param == 'param':
         @injector.param('a_str', str, length=LENGTH)
         def requires_str(a_str):
+            """I require a str"""
             return a_str
 
     return requires_str
 
 
 def test_basic(basic_injected_function):
-    assert isinstance(basic_injected_function, Injected)
+    assert_wrapped(basic_injected_function)
 
     assert basic_injected_function() == INT_VALUE
 
 
 def test_inject_param(parametrized_injected_function):
-    assert isinstance(parametrized_injected_function, Injected)
+    assert_wrapped(parametrized_injected_function)
 
     assert parametrized_injected_function() == STR_VALUE * LENGTH
 
@@ -148,6 +170,7 @@ def test_instancemethod(injector):
 
     thing = MyThing()
 
+    assert_wrapped(thing.requires_int)
     assert thing.requires_int() == (thing, INT_VALUE)
 
 
@@ -159,6 +182,8 @@ def test_classmethod(injector):
             return cls, an_int
 
     thing = MyThing()
+
+    assert_wrapped(thing.requires_int)
     assert thing.requires_int() == (MyThing, INT_VALUE)
 
 
@@ -170,4 +195,6 @@ def test_staticmethod(injector):
             return an_int
 
     thing = MyThing()
+
+    assert_wrapped(thing.requires_int)
     assert thing.requires_int() == INT_VALUE

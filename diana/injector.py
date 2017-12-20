@@ -150,7 +150,10 @@ class Injected(object):
 
     def __get__(self, obj, type=None):
         # Get is required to support wrapping instance methods
-        return functools.partial(self, obj)
+        part = functools.partial(self, obj)
+        part.__code__ = self.func.__code__
+        functools.update_wrapper(part, self.func)
+        return part
 
     def __call__(self, *args, **kwargs) -> t.Any:
         kwargs.update(self.resolve_dependencies(kwargs))

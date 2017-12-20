@@ -45,10 +45,7 @@ def modules(request):
 @pytest.fixture
 def injector(modules):
     injector = Injector()
-
-    for module in modules:
-        injector.load_module(module)
-
+    injector.load(*modules)
     return injector
 
 

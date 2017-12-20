@@ -24,6 +24,10 @@ class Injector(object):
         self.providers = {}
         self.async_providers = {}
 
+    def load(self, *modules):
+        for module in modules:
+            self.load_module(module)
+
     def load_module(self, module: Module) -> None:
         self.modules.append(module)
         for feature, provider in module.providers.items():

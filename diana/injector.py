@@ -142,6 +142,12 @@ class Injected(object):
 
         return output
 
+    @property
+    def __code__(self):
+        # Some libraries rely on inspecting `__code__` (behave)
+        # So fake it?
+        return self.func.__code__
+
     def __get__(self, obj, type=None):
         # Get is required to support wrapping instance methods
         return functools.partial(self, obj)

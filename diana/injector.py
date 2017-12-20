@@ -63,9 +63,11 @@ class Injector(object):
             return t.cast(F, func)
         return wrapper
 
-    def param(self, kwarg, **params) -> t.Callable[[F], F]:
+    def param(self, kwarg, __feature=None, **params) -> t.Callable[[F], F]:
         def wrapper(func: F) -> F:
             func = self.wrap_dependent(func)
+            if __feature:
+                func.add_dependency(kwarg, __feature)
             func.add_params(kwarg, params)
             return t.cast(F, func)
         return wrapper

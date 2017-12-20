@@ -67,7 +67,7 @@ def basic_injected_function(request, injector):
     return requires_int
 
 
-@pytest.fixture(params=['__call__', 'inject'])
+@pytest.fixture(params=['__call__', 'inject', 'param'])
 def parametrized_injected_function(request, injector):
     if request.param == '__call__':
         @injector
@@ -78,6 +78,11 @@ def parametrized_injected_function(request, injector):
     elif request.param == 'inject':
         @injector.inject(a_str=str)
         @injector.param('a_str', length=LENGTH)
+        async def requires_str(a_str):
+            return a_str
+
+    elif request.param == 'param':
+        @injector.param('a_str', str, length=LENGTH)
         async def requires_str(a_str):
             return a_str
 

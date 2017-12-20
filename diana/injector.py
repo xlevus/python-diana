@@ -24,9 +24,21 @@ class Injector(object):
         self.providers = {}
         self.async_providers = {}
 
-    def load(self, *modules):
+    def load(self, *modules: Module):
         for module in modules:
             self.load_module(module)
+
+    def unload(self, *modules: Module) -> None:
+        keep = self.modules[:]
+        self.modules = []
+
+        self.providers = {}
+        self.async_providers = {}
+
+        for m in keep:
+            if m in modules:
+                continue
+            self.load_module(m)
 
     def load_module(self, module: Module) -> None:
         self.modules.append(module)
@@ -37,14 +49,7 @@ class Injector(object):
             self.async_providers[feature] = (module, provider)
 
     def unload_module(self, module: Module) -> None:
-        modules = self.modules[:]
-        self.providers = {}
-        self.async_providers = {}
-
-        for m in modules:
-            if m == module:
-                continue
-            self.load_module(m)
+        self.unload(module)
 
     def wrap_dependent(self, func: FuncType) -> 'Dependent':
         if not isinstance(func, Injected):

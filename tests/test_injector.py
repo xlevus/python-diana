@@ -111,3 +111,25 @@ def test_module_dependencies(injector):
 def test_missing_dependency(injector, basic_injected_function):
     with pytest.raises(RuntimeError):
         basic_injected_function()
+
+
+def test_module_unloading(injector):
+    class ToUnload(Module):
+        @provider
+        def provide_bool(self) -> bool:
+            return False
+
+    assert bool not in injector.providers
+    assert str in injector.providers
+    assert int in injector.providers
+
+    mod = ToUnload()
+    injector.load_module(mod)
+    assert bool in injector.providers
+    assert str in injector.providers
+    assert int in injector.providers
+
+    injector.unload_module(mod)
+    assert bool not in injector.providers
+    assert str in injector.providers
+    assert int in injector.providers

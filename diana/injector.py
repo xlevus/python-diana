@@ -32,6 +32,16 @@ class Injector(object):
         for feature, provider in module.async_providers.items():
             self.async_providers[feature] = (module, provider)
 
+    def unload_module(self, module: Module) -> None:
+        modules = self.modules[:]
+        self.providers = {}
+        self.async_providers = {}
+
+        for m in modules:
+            if m == module:
+                continue
+            self.load_module(m)
+
     def wrap_dependent(self, func: FuncType) -> 'Dependent':
         if not isinstance(func, Injected):
             if asyncio.iscoroutinefunction(func):

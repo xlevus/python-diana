@@ -10,6 +10,7 @@ STR_VALUE = 'x'
 
 
 def assert_wrapped(wrapped_func):
+    assert hasattr(wrapped_func, '__dependencies__')
     source_func = wrapped_func.__wrapped__
 
     assert wrapped_func.__doc__ == source_func.__doc__
@@ -54,9 +55,7 @@ def modules(request):
 @pytest.fixture
 def injector(modules):
     injector = Injector()
-
-    for module in modules:
-        injector.load_module(module)
+    injector.load(*modules)
 
     return injector
 
@@ -127,7 +126,7 @@ def test_module_dependencies(injector):
     def requires_float(a_float):
         return a_float
 
-    injector.load_module(DependentModule())
+    injector.load(DependentModule())
 
     assert requires_float() == float(INT_VALUE)
 
@@ -151,12 +150,12 @@ def test_module_unloading(injector):
     assert int in injector.providers
 
     mod = ToUnload()
-    injector.load_module(mod)
+    injector.load(mod)
     assert bool in injector.providers
     assert str in injector.providers
     assert int in injector.providers
 
-    injector.unload_module(mod)
+    injector.unload(mod)
     assert bool not in injector.providers
     assert str in injector.providers
     assert int in injector.providers

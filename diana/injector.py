@@ -19,16 +19,33 @@ class Injector(object):
     # providers: SyncProviderMap
     # async_providers: AsyncProviderMap
 
-    def __init__(self):
+    def __init__(self,
+                 _sync_dep_klass: t.Type['Dependency'] = None,
+                 _async_dep_klass: t.Type['Dependency'] = None):
         self.modules = []
         self.providers = {}
         self.async_providers = {}
 
+        self._sync_dep = _sync_dep_klass or Dependencies
+        self._async_dep = _async_dep_klass or AsyncDependencies
+
     def load(self, *modules: Module):
+        """Load the given modules in the provided order.
+
+        Any providers in the modules will take precedence over
+        any already loaded providers.
+        """
         for module in modules:
-            self.load_module(module)
+            self._load_module(module)
 
     def unload(self, *modules: Module) -> None:
+        """Unload the given modules.
+
+        If the module is not loaded, nothing will happen.
+
+        Any providers that have been superceded by providers in the
+        unloaded module will be reinstated.
+        """
         keep = self.modules[:]
         self.modules = []
 
@@ -38,9 +55,9 @@ class Injector(object):
         for m in keep:
             if m in modules:
                 continue
-            self.load_module(m)
+            self._load_module(m)
 
-    def load_module(self, module: Module) -> None:
+    def _load_module(self, module: Module) -> None:
         self.modules.append(module)
         for feature, provider in module.providers.items():
             self.providers[feature] = (module, provider)
@@ -48,17 +65,21 @@ class Injector(object):
         for feature, provider in module.async_providers.items():
             self.async_providers[feature] = (module, provider)
 
-    def unload_module(self, module: Module) -> None:
-        self.unload(module)
-
     def wrap_dependent(self, func: F) -> F:
+        """Wrap a function to have it's dependencies injected.
+
+        The returning function will have a `__dependencies__` attribute
+        used to manage dependencies and parameters for the wrapped function.
+
+        Note: This does not specify which dependencies to inject.
+        """
         if hasattr(func, '__dependencies__'):
             return func
 
         if asyncio.iscoroutinefunction(func):
-            klass = AsyncDependencies
+            klass = self._async_dep
         else:
-            klass = Dependencies
+            klass = self._sync_dep
 
         injected = klass(self, func)
 
@@ -71,11 +92,29 @@ class Injector(object):
         return wrapped
 
     def __call__(self, func: F) -> F:
+        """Wrap a function and attempt to discover it's dependencies by
+        inspecting the annotations on kwarg-only arguments.
+
+        >>>
+        >>> @injector
+        >>> def my_func(*, a_frob: Frob):
+        >>>     assert isinstance(a_frob, Frob)
+        >>>
+        """
         func = self.wrap_dependent(func)
         func.__dependencies__.inspect_dependencies()
         return t.cast(F, func)
 
     def inject(self, **mapping) -> t.Callable[[F], F]:
+        """Wrap a function and specify which dependencies to inject on which
+        kwargs.
+
+        >>>
+        >>> @injector.inject(a_frob: Frob)
+        >>> def my_func(a_frob):
+        >>>     assert isinstance(a_frob, Frob)
+        >>>
+        """
         def wrapper(func: F) -> F:
             func = self.wrap_dependent(func)
             for kwarg, feature in mapping.items():
@@ -84,6 +123,24 @@ class Injector(object):
         return wrapper
 
     def param(self, kwarg, __feature=None, **params) -> t.Callable[[F], F]:
+        """Specify parameters to pass to the dependencies provider.
+
+        >>>
+        >>> @injector
+        >>> @injector.param('a_frob', frobulation='high')
+        >>> def my_func(a_frob: Frob):
+        >>>     assert a_frob.frobulation == 'high'
+        >>>
+
+        You can also specify the dependency type as an optional second
+        argument.
+
+        >>>
+        >>> @injector.param('a_frob', Frob, frobulation='high')
+        >>> def my_func(a_frob):
+        >>>     assert a_frob.frobulation == 'high'
+        >>>
+        """
         def wrapper(func: F) -> F:
             func = self.wrap_dependent(func)
             if __feature:
@@ -92,7 +149,10 @@ class Injector(object):
             return t.cast(F, func)
         return wrapper
 
-    def get(self, feature, params):
+    def get(self, feature, params=None):
+        """Get the resolved dependency for `feature`."""
+        params = params or {}
+
         provider_map = self.providers
         if feature not in provider_map:
             raise NoProvider('No provider for {!r}'.format(feature))
@@ -100,6 +160,7 @@ class Injector(object):
         return provider(module, **params)
 
     def get_async(self, feature, params):
+        """Get the resolved async dependency for `feature`."""
         provider_map = self.async_providers
         if feature not in provider_map:
             raise NoProvider('No provider for {!r}'.format(feature))
@@ -108,6 +169,9 @@ class Injector(object):
 
 
 class Dependencies(object):
+    """Container class to manage dependencies for an injected function.
+    """
+
     def __init__(self, injector: Injector, func: FuncType) -> None:
         functools.update_wrapper(self, func)
         self.injector = injector
@@ -159,6 +223,9 @@ class Dependencies(object):
 
 
 class AsyncDependencies(Dependencies):
+    """Container class to manage dependencies for an injected async function.
+    """
+
     async def resolve_dependencies(self, called_kwargs):
         output = {}
         futures = {}

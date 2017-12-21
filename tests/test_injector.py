@@ -1,6 +1,6 @@
 import pytest
 
-from diana.injector import Injector, Injected
+from diana.injector import Injector
 from diana.module import Module, provider
 
 LENGTH = 3
@@ -15,8 +15,8 @@ def assert_wrapped(wrapped_func):
     assert wrapped_func.__doc__ == source_func.__doc__
     assert wrapped_func.__name__ == source_func.__name__
 
-    # TODO: Determine if this is really needed
-    assert wrapped_func.__code__ == source_func.__code__
+    # Some libraries inspect __code__ directly.
+    assert hasattr(wrapped_func, '__code__')
 
     if hasattr(source_func, '__module__'):
         assert wrapped_func.__module__ == source_func.__module__

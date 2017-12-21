@@ -1,6 +1,6 @@
 import pytest
 
-from diana.injector import Injector, Injected
+from diana.injector import Injector
 from diana.module import Module, provider
 
 LENGTH = 3
@@ -87,14 +87,10 @@ def parametrized_injected_function(request, injector):
 
 
 async def test_basic(basic_injected_function):
-    assert isinstance(basic_injected_function, Injected)
-
     assert (await basic_injected_function()) == INT_VALUE
 
 
 async def test_inject_param(parametrized_injected_function):
-    assert isinstance(parametrized_injected_function, Injected)
-
     assert (await parametrized_injected_function()) == STR_VALUE * LENGTH
 
 

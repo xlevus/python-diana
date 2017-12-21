@@ -51,24 +51,35 @@ class Injector(object):
     def unload_module(self, module: Module) -> None:
         self.unload(module)
 
-    def wrap_dependent(self, func: FuncType) -> 'Dependent':
-        if not isinstance(func, Injected):
-            if asyncio.iscoroutinefunction(func):
-                func = AsyncInjected(self, func)
-            else:
-                func = Injected(self, func)
-        return func
+    def wrap_dependent(self, func: F) -> F:
+        if hasattr(func, '__dependencies__'):
+            return func
+
+        if asyncio.iscoroutinefunction(func):
+            klass = AsyncDependencies
+        else:
+            klass = Dependencies
+
+        injected = klass(self, func)
+
+        @functools.wraps(func)
+        def wrapped(*args, **kwargs):
+            return injected.call_injected(*args, **kwargs)
+
+        wrapped.__dependencies__ = injected
+
+        return wrapped
 
     def __call__(self, func: F) -> F:
         func = self.wrap_dependent(func)
-        func.inspect_dependencies()
+        func.__dependencies__.inspect_dependencies()
         return t.cast(F, func)
 
     def inject(self, **mapping) -> t.Callable[[F], F]:
         def wrapper(func: F) -> F:
             func = self.wrap_dependent(func)
             for kwarg, feature in mapping.items():
-                func.add_dependency(kwarg, feature)
+                func.__dependencies__.add_dependency(kwarg, feature)
             return t.cast(F, func)
         return wrapper
 
@@ -76,8 +87,8 @@ class Injector(object):
         def wrapper(func: F) -> F:
             func = self.wrap_dependent(func)
             if __feature:
-                func.add_dependency(kwarg, __feature)
-            func.add_params(kwarg, params)
+                func.__dependencies__.add_dependency(kwarg, __feature)
+            func.__dependencies__.add_params(kwarg, params)
             return t.cast(F, func)
         return wrapper
 
@@ -96,7 +107,7 @@ class Injector(object):
         return provider(module, **params)
 
 
-class Injected(object):
+class Dependencies(object):
     def __init__(self, injector: Injector, func: FuncType) -> None:
         functools.update_wrapper(self, func)
         self.injector = injector
@@ -142,25 +153,12 @@ class Injected(object):
 
         return output
 
-    @property
-    def __code__(self):
-        # Some libraries rely on inspecting `__code__` (behave)
-        # So fake it?
-        return self.func.__code__
-
-    def __get__(self, obj, type=None):
-        # Get is required to support wrapping instance methods
-        part = functools.partial(self, obj)
-        part.__code__ = self.func.__code__
-        functools.update_wrapper(part, self.func)
-        return part
-
-    def __call__(self, *args, **kwargs) -> t.Any:
+    def call_injected(self, *args, **kwargs) -> t.Any:
         kwargs.update(self.resolve_dependencies(kwargs))
         return self.func(*args, **kwargs)
 
 
-class AsyncInjected(Injected):
+class AsyncDependencies(Dependencies):
     async def resolve_dependencies(self, called_kwargs):
         output = {}
         futures = {}
@@ -177,6 +175,6 @@ class AsyncInjected(Injected):
 
         return output
 
-    async def __call__(self, *args, **kwargs) -> t.Any:
+    async def call_injected(self, *args, **kwargs) -> t.Any:
         kwargs.update(await self.resolve_dependencies(kwargs))
         return (await self.func(*args, **kwargs))

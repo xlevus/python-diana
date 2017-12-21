@@ -7,7 +7,7 @@ from .module import Module
 
 
 FuncType = t.Callable[..., t.Any]
-F = t.TypeVar('F', bound=FuncType)
+Decorator = t.Callable[[FuncType], FuncType]
 
 
 class NoProvider(RuntimeError):
@@ -65,7 +65,7 @@ class Injector(object):
         for feature, provider in module.async_providers.items():
             self.async_providers[feature] = (module, provider)
 
-    def wrap_dependent(self, func: F) -> F:
+    def wrap_dependent(self, func: FuncType) -> FuncType:
         """Wrap a function to have it's dependencies injected.
 
         The returning function will have a `__dependencies__` attribute
@@ -91,7 +91,7 @@ class Injector(object):
 
         return wrapped
 
-    def __call__(self, func: F) -> F:
+    def __call__(self, func: FuncType) -> FuncType:
         """Wrap a function and attempt to discover it's dependencies by
         inspecting the annotations on kwarg-only arguments.
 
@@ -103,9 +103,9 @@ class Injector(object):
         """
         func = self.wrap_dependent(func)
         func.__dependencies__.inspect_dependencies()
-        return t.cast(F, func)
+        return func
 
-    def inject(self, **mapping) -> t.Callable[[F], F]:
+    def inject(self, **mapping) -> Decorator:
         """Wrap a function and specify which dependencies to inject on which
         kwargs.
 
@@ -115,14 +115,14 @@ class Injector(object):
         >>>     assert isinstance(a_frob, Frob)
         >>>
         """
-        def wrapper(func: F) -> F:
+        def wrapper(func: FuncType) -> FuncType:
             func = self.wrap_dependent(func)
             for kwarg, feature in mapping.items():
                 func.__dependencies__.add_dependency(kwarg, feature)
-            return t.cast(F, func)
+            return func
         return wrapper
 
-    def param(self, kwarg, __feature=None, **params) -> t.Callable[[F], F]:
+    def param(self, kwarg, __feature=None, **params) -> Decorator:
         """Specify parameters to pass to the dependencies provider.
 
         >>>
@@ -141,12 +141,12 @@ class Injector(object):
         >>>     assert a_frob.frobulation == 'high'
         >>>
         """
-        def wrapper(func: F) -> F:
+        def wrapper(func: FuncType) -> FuncType:
             func = self.wrap_dependent(func)
             if __feature:
                 func.__dependencies__.add_dependency(kwarg, __feature)
             func.__dependencies__.add_params(kwarg, params)
-            return t.cast(F, func)
+            return func
         return wrapper
 
     def get(self, feature, params=None):

@@ -14,6 +14,9 @@ AsyncProviderMap = t.Dict[Feature, AsyncFeatureProvider]
 FuncType = t.Callable[..., t.Any]
 F = t.TypeVar('F', bound=FuncType)
 
+if t.TYPE_CHECKING:
+    from .injector import Injector  # noqa
+
 
 def mark_provides(func: FeatureProvider, feature: Feature) -> None:
     func.__provides__ = feature
@@ -60,3 +63,9 @@ class Module(metaclass=ModuleMeta):
         else:
             cls.providers[func.__provides__] = func
         return func
+
+    def load(self, injector: 'Injector'):
+        pass
+
+    def unload(self, injector: 'Injector'):
+        pass

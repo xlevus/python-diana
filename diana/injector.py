@@ -36,6 +36,7 @@ class Injector(object):
         any already loaded providers.
         """
         for module in modules:
+            module.load(self)
             self._load_module(module)
 
     def unload(self, *modules: Module) -> None:
@@ -54,6 +55,7 @@ class Injector(object):
 
         for m in keep:
             if m in modules:
+                m.unload(self)
                 continue
             self._load_module(m)
 

@@ -26,7 +26,6 @@ def assert_wrapped(wrapped_func):
         assert wrapped_func.__annotations__ == source_func.__annotations__
 
 
-
 class ModuleSync(Module):
     @provider
     def provide_int(self) -> int:
@@ -140,10 +139,23 @@ def test_missing_dependency(injector, basic_injected_function):
 
 
 def test_module_unloading(injector):
+    loaded = 0
+    unloaded = 0
+
     class ToUnload(Module):
         @provider
         def provide_bool(self) -> bool:
             return False
+
+        def load(self, injector):
+            nonlocal loaded
+            assert self not in injector.modules
+            loaded += 1
+
+        def unload(self, injector):
+            nonlocal unloaded
+            assert self not in injector.modules
+            unloaded += 1
 
     assert bool not in injector.providers
     assert str in injector.providers
@@ -151,11 +163,14 @@ def test_module_unloading(injector):
 
     mod = ToUnload()
     injector.load(mod)
+    assert loaded == 1
     assert bool in injector.providers
     assert str in injector.providers
     assert int in injector.providers
 
     injector.unload(mod)
+    assert loaded == 1
+    assert unloaded == 1
     assert bool not in injector.providers
     assert str in injector.providers
     assert int in injector.providers

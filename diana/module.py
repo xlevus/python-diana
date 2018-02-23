@@ -28,6 +28,13 @@ def provider(func: FeatureProvider) -> FeatureProvider:
     return func
 
 
+def provides(feature: Feature):
+    def _decorator(func: FeatureProvider) -> FeatureProvider:
+        mark_provides(func, feature)
+        return func
+    return _decorator
+
+
 class ModuleMeta(type):
     def __new__(mcls, name, bases, attrs):
         providers = {}
@@ -57,12 +64,34 @@ class Module(metaclass=ModuleMeta):
 
     @classmethod
     def provider(cls, func: FeatureProvider) -> FeatureProvider:
-        provider(func)
+        cls.register(func)
+        return func
+
+    @classmethod
+    def provides(cls, feature: Feature):
+        def _decorator(func: FeatureProvider) -> FeatureProvider:
+            cls.register(func, feature)
+            return func
+        return _decorator
+
+    @classmethod
+    def register(cls,
+                 func: FeatureProvider,
+                 feature: t.Optional[Feature]=None) -> None:
+        """Register `func` to be a provider for `feature`.
+
+        If `feature` is `None`, the feature's return annotation will be
+        inspected."""
+
+        if feature:
+            mark_provides(func, feature)
+        else:
+            provider(func)
+
         if asyncio.iscoroutinefunction(func):
             cls.async_providers[func.__provides__] = func
         else:
             cls.providers[func.__provides__] = func
-        return func
 
     def load(self, injector: 'Injector'):
         pass

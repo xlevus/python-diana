@@ -214,6 +214,9 @@ class Dependencies(object):
         output = {}
 
         for kwarg, feature in self.dependencies.items():
+            if kwarg in called_kwargs:
+                # Dependency already provided explicitly
+                continue
             params = self.dependency_params.get(kwarg, {})
             output[kwarg] = self.injector.get(feature, params)
 
@@ -233,6 +236,9 @@ class AsyncDependencies(Dependencies):
         futures = {}
 
         for kwarg, feature in self.dependencies.items():
+            if kwarg in called_kwargs:
+                continue
+
             params = self.dependency_params.get(kwarg, {})
             try:
                 futures[kwarg] = self.injector.get_async(feature, params)

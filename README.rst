@@ -1,5 +1,16 @@
 Python-Diana
 =================================
+
+.. image:: https://img.shields.io/pypi/v/diana.svg?style=for-the-badge
+   :target: https://pypi.python.org/pypi/diana/
+
+.. image:: https://img.shields.io/pypi/pyversions/diana.svg?style=for-the-badge
+   :target: https://pypi.python.org/pypi/diana/
+
+.. image:: https://img.shields.io/travis/xlevus/python-diana.svg?style=for-the-badge
+   :target: https://travis-ci.org/xlevus/python-diana
+
+
 A simple async-friendly dependency injection framework for Python 3.
 
 Supports:

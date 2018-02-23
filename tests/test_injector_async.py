@@ -31,6 +31,12 @@ class ModuleAsync(Module):
         return STR_VALUE * length
 
 
+class AltModuleAsync(Module):
+    @provider
+    def provide_bool(self) -> bool:
+        return False
+
+
 @pytest.fixture(params=[
     (ModuleSync,),
     (ModuleAsync,),
@@ -92,6 +98,21 @@ async def test_basic(basic_injected_function):
 
 async def test_inject_param(parametrized_injected_function):
     assert (await parametrized_injected_function()) == STR_VALUE * LENGTH
+
+
+async def test_basic_manual(basic_injected_function):
+    assert (await basic_injected_function(an_int=99)) == 99
+
+
+@pytest.mark.parametrize('modules', [(AltModuleAsync,)], indirect=True)
+async def test_missing_dependency(injector, basic_injected_function):
+    with pytest.raises(RuntimeError):
+        await basic_injected_function()
+
+
+@pytest.mark.parametrize('modules', [(AltModuleAsync,)], indirect=True)
+async def test_missing_dependency_provided(injector, basic_injected_function):
+    assert (await basic_injected_function(an_int=99)) == 99
 
 
 async def test_instancemethod(injector):

@@ -107,6 +107,10 @@ def test_basic(basic_injected_function):
     assert basic_injected_function() == INT_VALUE
 
 
+def test_basic_manual(basic_injected_function):
+    assert basic_injected_function(an_int=99) == 99
+
+
 def test_inject_param(parametrized_injected_function):
     assert_wrapped(parametrized_injected_function)
 
@@ -136,6 +140,13 @@ def test_module_dependencies(injector):
 def test_missing_dependency(injector, basic_injected_function):
     with pytest.raises(RuntimeError):
         basic_injected_function()
+
+
+@pytest.mark.parametrize('modules', [
+    (AltModuleSync,),
+], indirect=True)
+def test_missing_dependency_provided(injector, basic_injected_function):
+    assert basic_injected_function(an_int=99) == 99
 
 
 def test_module_unloading(injector):

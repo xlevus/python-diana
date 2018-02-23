@@ -26,9 +26,10 @@ class ModuleAsync(Module):
     async def provide_int(self) -> int:
         return INT_VALUE
 
-    @provider
-    async def provide_string(self, length: int) -> str:
-        return STR_VALUE * length
+
+@ModuleAsync.provider
+async def provide_string(self, length: int) -> str:
+    return STR_VALUE * length
 
 
 class AltModuleAsync(Module):

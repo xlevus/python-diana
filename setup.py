@@ -29,7 +29,7 @@ setup(
     python_requires=">3.4.*, <4",
     tests_require=['pytest', 'mock'],
     classifiers=[
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 3.5',

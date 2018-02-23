@@ -1,148 +1,249 @@
-from functools import wraps
-from contextlib import contextmanager
-from collections import defaultdict, deque
+import inspect
+import functools
+import asyncio
+import typing as t
 
-from .scopes import Scope
+from .module import Module
 
-NONE = Scope(value=None)
+
+FuncType = t.Callable[..., t.Any]
+Decorator = t.Callable[[FuncType], FuncType]
+
+
+class NoProvider(RuntimeError):
+    pass
 
 
 class Injector(object):
-    """Provides lazy-evaluation dependency injection.
+    # modules: t.List[Module]
+    # providers: SyncProviderMap
+    # async_providers: AsyncProviderMap
 
-    >>> injector = Injector()
-    """
-    def __init__(self):
+    def __init__(self,
+                 _sync_dep_klass: t.Type['Dependency'] = None,
+                 _async_dep_klass: t.Type['Dependency'] = None):
+        self.modules = []
         self.providers = {}
-        self.overrides = defaultdict(deque)  # This should be thread-local
-        self.aliases = {}
+        self.async_providers = {}
 
-    def provide(self, feature, factory=None, value=None, aliases=(),
-                scope=Scope):
-        """Registers ``factory`` or ``value`` to be injected against ``feature``
+        self._sync_dep = _sync_dep_klass or Dependencies
+        self._async_dep = _async_dep_klass or AsyncDependencies
 
-        :param feature: A hashable object to indicate the required dependency.
-        :param factory: (Optional) A callable object that provides the
-            dependency.
-            Factories will take precedence over values.
-        :param value: (Optional) The value of the dependency itself.
-        :param scope: (Optional) ``Scope`` subclass to define the lifecycle of the
-            dependency. If ``factory`` or ``value`` are None, this can also be a
-            ``Scope`` instance. Default: :py:class:``diana.scopes.Scope``.
-        :param aliases: A tuple of hashable aliases that this dependency can
-            also be requested via.
+    def load(self, *modules: Module):
+        """Load the given modules in the provided order.
+
+        Any providers in the modules will take precedence over
+        any already loaded providers.
         """
+        for module in modules:
+            module.load(self)
+            self._load_module(module)
 
-        if feature in self.providers or feature in self.aliases:
-            raise RuntimeError("Feature '{}' already provided".format(feature))
+    def unload(self, *modules: Module) -> None:
+        """Unload the given modules.
 
-        for alias in aliases:
-            if (alias in self.providers) or (alias in self.aliases):
-                raise RuntimeError("Alias '{}' laready provided".format(alias))
+        If the module is not loaded, nothing will happen.
 
-        if factory:
-            scope = scope(factory=factory)
-        elif value:
-            scope = Scope(value=value)
-
-        self.providers[feature] = scope
-        for alias in aliases:
-            self.aliases[alias] = feature
-
-    @contextmanager
-    def override(self, feature, factory=None, value=None, scope=Scope):
-        """Context manager to override ``feature`` with ``factory``, ``value`` or
-        ``scope``.
-
-        You are not able to provide aditional aliases with ``override``, but
-        all previously define aliases will also provide the temporary values.
-
-        .. caution:: This is not thread safe.
-
-        >>> with injector.override('Feature', value='other value'):
-        ...     foo()
-        ...
-        'other_value'
-
+        Any providers that have been superceded by providers in the
+        unloaded module will be reinstated.
         """
-        _scope = scope(factory=factory, value=value)
+        keep = self.modules[:]
+        self.modules = []
 
-        self.overrides[feature].append(_scope)
-        yield
-        self.overrides[feature].pop()
+        self.providers = {}
+        self.async_providers = {}
 
-        if not self.overrides[feature]:
-            del self.overrides[feature]
+        for m in keep:
+            if m in modules:
+                m.unload(self)
+                continue
+            self._load_module(m)
 
-    def factory(self, feature, scope=Scope, aliases=()):
-        """Convenience factory decorator for ``Injector.provide``.
+    def _load_module(self, module: Module) -> None:
+        self.modules.append(module)
+        for feature, provider in module.providers.items():
+            self.providers[feature] = (module, provider)
 
-        :param feature: The feature to provide.
-        :param scope: The scope to provide the feature in.
+        for feature, provider in module.async_providers.items():
+            self.async_providers[feature] = (module, provider)
+
+    def wrap_dependent(self, func: FuncType) -> FuncType:
+        """Wrap a function to have it's dependencies injected.
+
+        The returning function will have a `__dependencies__` attribute
+        used to manage dependencies and parameters for the wrapped function.
+
+        Note: This does not specify which dependencies to inject.
         """
-        def _decorator(func):
-            self.provide(feature, factory=func, scope=scope, aliases=aliases)
+        if hasattr(func, '__dependencies__'):
             return func
-        return _decorator
 
-    def get(self, feature, soft=False, aliases=True):
-        """Get the value of ``feature``.
-
-        :param bool soft: If True, when no provider for ``feature`` can be
-            found, None will be returned. (Default: ``False``).
-        :param bool aliases: If True, aliases will be searched if no
-            provider can be found.
-        """
-        return self._get_scope(feature, soft, aliases).get()
-
-    def __call__(self, **kwargs):
-        """Alias of :py:method:``depends``."""
-        return self.depends(**kwargs)
-
-    def depends(self, **kwargs):
-        """Wraps a function to inject dependencies keyword arguments.
-
-        If the keyword argument is already provided when the wrapped function
-        is called, the argument will not be overwritten.
-        """
-        return self._decorator(kwargs, False)
-
-    def soft(self, **kwargs):
-        """Wraps a function to softly inject dependencies as keyword arguments.
-        If a dependency provider can not be found, the value passed into the
-        keyword argument will be ``None``.
-
-        Like :py:func:`depends`, already passed in keyword arguments will not
-        be overwritten.
-        """
-        return self._decorator(kwargs, True)
-
-    def _get_scope(self, feature, soft=False, aliases=True):
-        if feature in self.overrides:
-            _scope = self.overrides[feature][-1]
-        elif feature in self.providers:
-            _scope = self.providers[feature]
-        elif aliases and feature in self.aliases:
-            actual = self.aliases[feature]
-            _scope = self._get_scope(actual, soft, False)
-
+        if asyncio.iscoroutinefunction(func):
+            klass = self._async_dep
         else:
-            if soft:
-                _scope = NONE
-            else:
-                raise RuntimeError("No ")
+            klass = self._sync_dep
 
-        return _scope
+        injected = klass(self, func)
 
-    def _decorator(self, kwargs, soft):
-        def _dec(func):
-            @wraps(func)
-            def _inner(*func_args, **func_kwargs):
-                for kwarg in kwargs:
-                    if kwarg not in func_kwargs:
-                        dependency = kwargs[kwarg]
-                        value = self.get(dependency, soft)
-                        func_kwargs[kwarg] = value
-                return func(*func_args, **func_kwargs)
-            return _inner
-        return _dec
+        @functools.wraps(func)
+        def wrapped(*args, **kwargs):
+            return injected.call_injected(*args, **kwargs)
+
+        wrapped.__dependencies__ = injected
+
+        return wrapped
+
+    def __call__(self, func: FuncType) -> FuncType:
+        """Wrap a function and attempt to discover it's dependencies by
+        inspecting the annotations on kwarg-only arguments.
+
+        >>>
+        >>> @injector
+        >>> def my_func(*, a_frob: Frob):
+        >>>     assert isinstance(a_frob, Frob)
+        >>>
+        """
+        func = self.wrap_dependent(func)
+        func.__dependencies__.inspect_dependencies()
+        return func
+
+    def inject(self, **mapping) -> Decorator:
+        """Wrap a function and specify which dependencies to inject on which
+        kwargs.
+
+        >>>
+        >>> @injector.inject(a_frob: Frob)
+        >>> def my_func(a_frob):
+        >>>     assert isinstance(a_frob, Frob)
+        >>>
+        """
+        def wrapper(func: FuncType) -> FuncType:
+            func = self.wrap_dependent(func)
+            for kwarg, feature in mapping.items():
+                func.__dependencies__.add_dependency(kwarg, feature)
+            return func
+        return wrapper
+
+    def param(self, kwarg, __feature=None, **params) -> Decorator:
+        """Specify parameters to pass to the dependencies provider.
+
+        >>>
+        >>> @injector
+        >>> @injector.param('a_frob', frobulation='high')
+        >>> def my_func(a_frob: Frob):
+        >>>     assert a_frob.frobulation == 'high'
+        >>>
+
+        You can also specify the dependency type as an optional second
+        argument.
+
+        >>>
+        >>> @injector.param('a_frob', Frob, frobulation='high')
+        >>> def my_func(a_frob):
+        >>>     assert a_frob.frobulation == 'high'
+        >>>
+        """
+        def wrapper(func: FuncType) -> FuncType:
+            func = self.wrap_dependent(func)
+            if __feature:
+                func.__dependencies__.add_dependency(kwarg, __feature)
+            func.__dependencies__.add_params(kwarg, params)
+            return func
+        return wrapper
+
+    def get(self, feature, params=None):
+        """Get the resolved dependency for `feature`."""
+        params = params or {}
+
+        provider_map = self.providers
+        if feature not in provider_map:
+            raise NoProvider('No provider for {!r}'.format(feature))
+        module, provider = provider_map[feature]
+        return provider(module, **params)
+
+    def get_async(self, feature, params):
+        """Get the resolved async dependency for `feature`."""
+        provider_map = self.async_providers
+        if feature not in provider_map:
+            raise NoProvider('No provider for {!r}'.format(feature))
+        module, provider = provider_map[feature]
+        return provider(module, **params)
+
+
+class Dependencies(object):
+    """Container class to manage dependencies for an injected function.
+    """
+
+    def __init__(self, injector: Injector, func: FuncType) -> None:
+        functools.update_wrapper(self, func)
+        self.injector = injector
+        self.func = func
+
+        self.dependency_params = {}
+        self.dependencies = {}
+
+    def __repr__(self):
+        params = ", ".join([
+            "{}={!r}".format(k, v)
+            for k, v in self.dependency_params
+        ])
+        return "<injected {self.func.__name__} ({params})>".format(
+            self=self, params=params)
+
+    def add_dependency(self, kwarg: str, feature) -> None:
+        if kwarg in self.dependencies:
+            raise RuntimeError('Dependency for kwarg {!r} exists'.format(
+                kwarg))
+        self.dependencies[kwarg] = feature
+
+    def add_params(self, kwarg, params):
+        self.dependency_params.setdefault(kwarg, {})\
+                              .update(params)
+
+    def inspect_dependencies(self):
+        signature = inspect.signature(self.func)
+
+        for kwarg, parameter in signature.parameters.items():
+            if parameter.kind != inspect.Parameter.KEYWORD_ONLY\
+               or parameter.annotation == inspect.Parameter.empty:
+                continue
+
+            self.dependencies[kwarg] = parameter.annotation
+
+    def resolve_dependencies(self, called_kwargs):
+        output = {}
+
+        for kwarg, feature in self.dependencies.items():
+            params = self.dependency_params.get(kwarg, {})
+            output[kwarg] = self.injector.get(feature, params)
+
+        return output
+
+    def call_injected(self, *args, **kwargs) -> t.Any:
+        kwargs.update(self.resolve_dependencies(kwargs))
+        return self.func(*args, **kwargs)
+
+
+class AsyncDependencies(Dependencies):
+    """Container class to manage dependencies for an injected async function.
+    """
+
+    async def resolve_dependencies(self, called_kwargs):
+        output = {}
+        futures = {}
+
+        for kwarg, feature in self.dependencies.items():
+            params = self.dependency_params.get(kwarg, {})
+            try:
+                futures[kwarg] = self.injector.get_async(feature, params)
+            except NoProvider:
+                output[kwarg] = self.injector.get(feature, params)
+
+        for k, v in futures.items():
+            output[k] = await v
+
+        return output
+
+    async def call_injected(self, *args, **kwargs) -> t.Any:
+        kwargs.update(await self.resolve_dependencies(kwargs))
+        return (await self.func(*args, **kwargs))

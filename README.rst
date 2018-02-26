@@ -43,10 +43,9 @@ Simple Example
    def requires_a_thing(*, thing: MyThing):
        return thing.get('suffix')
 
-   if __name__ == '__main__':
-       diana.injector.load_module(MyModule())
+   diana.injector.load_module(MyModule())
 
-       requires_a_thing()  # returns "a_prefix_suffix"
+   requires_a_thing()  # returns "a_prefix_suffix"
 
 
 Parametrized Dependencies
@@ -65,12 +64,108 @@ Parametrized Dependencies
            return Snake('-' + ('=' * length) + e)
 
 
-   @diana.inject(a_snake=Snake)
-   @diana.param('a_snake', length=5)
+   @diana.injector(a_snake=Snake)
+   @diana.injector.param('a_snake', length=5)
    def snake_printer(a_snake):
        print(a_snake, "Hissss")
 
-   if __name__ == '__main__':
-       diana.injector.load_module(SnakeModule())
+   diana.injector.load_module(SnakeModule())
 
-       snake_printer() # Prints: -=====e Hissss
+   snake_printer() # Prints: -=====e Hissss
+
+
+Modules
+^^^^^^^
+
+Modules provide dependencies.
+
+.. note:: The same dependency can be provided by both an async and sync providers
+   as shown in the `AType` providers below.
+
+.. code-block:: python
+
+   class MyModule(diana.Module):
+       def load(self, injector):
+           # Called when the module is loaded against `injector`.
+           pass
+
+       def unload(self, injector):
+           # Called when the module is unloaded against `injector`.
+           pass
+
+       @diana.provider
+       def provide_atype(self) -> AType:
+           return AType()
+
+       @diana.provider
+       async def provide_atype_async(self) -> AType:
+           await async_stuff()
+           return AType()
+
+       @diana.provides(BType)
+       def provide_btype(self):
+           return BType()
+
+
+   @MyModule.provider
+   def provide_ctype(module) -> CType:
+       return CType()
+
+   
+   @MyModule.provides(DType)
+   def provide_dtype(module):
+       return DType()
+
+
+Injection Styles
+^^^^^^^^^^^^^^^^
+
+There are three formats for injecting dependencies into functions
+
+ * Type Annotation w/ inspect
+ * Explicit
+ * Parametrized
+
+The following examples are all equivalent.
+
+.. code-block:: python
+
+   # Type Annotation w/ Inspect
+   @diana.injector
+   def func_a(*, a: AType, b: BType):
+       pass
+
+   # Explicit
+   @diana.injector.inject(a=AType, b=BType)
+   def func_a(*, a, b):
+       pass
+
+   # Parametrized.
+   # Note, if the second argument to param() is omitted, the type must be
+   # hinted by one of the previous methods.
+   @diana.injector.param('a', AType, a_param=...)
+   @diana.injector.param('b', BType, b_param=...)
+   def func_a(*, a, b):
+       pass
+
+In all cases, injected arguments must be keyword-only.
+
+Alternatively, a dependency can be manually provided, bypassing any injection.
+
+.. code-block:: python
+
+   func_a(a=AType(), b=BType())
+
+
+Missing Features
+^^^^^^^^^^^^^^^^
+
+Compared to other dependency injection frameworks, a few features are missing.
+
+ * Scope management - Currently there is no provision for scope to be managed by
+   diana and remains the Module/provider's responsibility.
+ * Constructor/Instance Injecting - it is not possible to have Diana set attributes
+   on instances by decorating the class definition.
+ * Thread safety - There have been no attempts to make Diana thread safe. In theory,
+   if modules are only loaded once (presumably at runtime), thread safety can be managed
+   by the Modules/providers.

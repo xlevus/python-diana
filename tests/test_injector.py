@@ -31,9 +31,10 @@ class ModuleSync(Module):
     def provide_int(self) -> int:
         return INT_VALUE
 
-    @provider
-    def provide_string(self, length: int) -> str:
-        return STR_VALUE * length
+
+@ModuleSync.provider
+def provide_string(self, length: int) -> str:
+    return STR_VALUE * length
 
 
 class AltModuleSync(Module):

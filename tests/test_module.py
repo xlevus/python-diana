@@ -1,4 +1,4 @@
-from diana.module import Module, provider
+from diana.module import Module, provider, provides
 
 
 def test_provider():
@@ -7,16 +7,26 @@ def test_provider():
         def p_int(self) -> int:
             return 1
 
+        @provides(str)
+        def p_str(self):
+            return "string"
+
         @provider
         async def async_p_int(self) -> int:
             return 2
 
+        @provides(str)
+        async def async_p_str(self):
+            return "string"
+
     assert MyModule.providers == {
-        int: MyModule.p_int
+        int: MyModule.p_int,
+        str: MyModule.p_str,
     }
 
     assert MyModule.async_providers == {
-        int: MyModule.async_p_int
+        int: MyModule.async_p_int,
+        str: MyModule.async_p_str,
     }
 
 
@@ -61,14 +71,24 @@ def test_decorator():
     def p_int(module) -> int:
         return 1
 
+    @MyModule.provides(str)
+    def p_str(module):
+        return "string"
+
     @MyModule.provider
     async def async_p_int(module) -> int:
         return 2
 
+    @MyModule.provider
+    async def async_p_str(module) -> str:
+        return "string"
+
     assert MyModule.providers == {
-        int: p_int
+        int: p_int,
+        str: p_str,
     }
 
     assert MyModule.async_providers == {
-        int: async_p_int
+        int: async_p_int,
+        str: async_p_str,
     }

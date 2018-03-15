@@ -77,6 +77,24 @@ def basic_injected_function(request, injector):
     return requires_int
 
 
+@pytest.fixture(params=['__call__', 'inject'])
+def defaulted_injected_function(request, injector):
+    if request.param == '__call__':
+        @injector
+        def requires_bool(*, a_bool: bool = False):
+            """I accept a bool"""
+            return a_bool
+
+    elif request.param == 'inject':
+        @injector.inject(a_bool=bool)
+        def requires_bool(a_bool = False):
+            """I accept a bool"""
+            return a_bool
+
+    return requires_bool
+
+
+
 @pytest.fixture(params=['__call__', 'inject', 'param'])
 def parametrized_injected_function(request, injector):
     if request.param == '__call__':
@@ -118,6 +136,11 @@ def test_inject_param(parametrized_injected_function):
     assert parametrized_injected_function() == STR_VALUE * LENGTH
 
 
+def test_provided_defaults(defaulted_injected_function):
+    assert defaulted_injected_function() == False
+    assert defaulted_injected_function(a_bool=True) == True
+
+
 def test_module_dependencies(injector):
 
     class DependentModule(Module):
@@ -148,6 +171,7 @@ def test_missing_dependency(injector, basic_injected_function):
 ], indirect=True)
 def test_missing_dependency_provided(injector, basic_injected_function):
     assert basic_injected_function(an_int=99) == 99
+
 
 
 def test_module_unloading(injector):

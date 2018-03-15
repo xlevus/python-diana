@@ -71,6 +71,21 @@ def basic_injected_function(request, injector):
     return requires_int
 
 
+@pytest.fixture(params=['__call__', 'inject'])
+def defaulted_injected_function(request, injector):
+    if request.param == '__call__':
+        @injector
+        async def requires_bool(*, a_bool: bool = False):
+            return a_bool
+
+    elif request.param == 'inject':
+        @injector.inject(a_bool=bool)
+        async def requires_bool(a_bool=False):
+            return a_bool
+
+    return requires_bool
+
+
 @pytest.fixture(params=['__call__', 'inject', 'param'])
 def parametrized_injected_function(request, injector):
     if request.param == '__call__':
@@ -103,6 +118,11 @@ async def test_inject_param(parametrized_injected_function):
 
 async def test_basic_manual(basic_injected_function):
     assert (await basic_injected_function(an_int=99)) == 99
+
+
+async def test_provided_defaults(defaulted_injected_function):
+    assert (await defaulted_injected_function()) == False
+    assert (await defaulted_injected_function(a_bool=True)) == True
 
 
 @pytest.mark.parametrize('modules', [(AltModuleAsync,)], indirect=True)

@@ -9,6 +9,8 @@ from .module import Module
 FuncType = t.Callable[..., t.Any]
 Decorator = t.Callable[[FuncType], FuncType]
 
+UNSET = inspect.Parameter.empty
+
 
 class NoProvider(RuntimeError):
     pass
@@ -151,23 +153,32 @@ class Injector(object):
             return func
         return wrapper
 
-    def get(self, feature, params=None):
+    def get(self, feature, params=None, default=UNSET):
         """Get the resolved dependency for `feature`."""
         params = params or {}
 
         provider_map = self.providers
         if feature not in provider_map:
-            raise NoProvider('No provider for {!r}'.format(feature))
+            if default is UNSET:
+                raise NoProvider('No provider for {!r}'.format(feature))
+            else:
+                return default
+
         module, provider = provider_map[feature]
         return provider(module, **params)
 
-    def get_async(self, feature, params):
+    def get_async(self, feature, params=None):
         """Get the resolved async dependency for `feature`."""
         provider_map = self.async_providers
         if feature not in provider_map:
             raise NoProvider('No provider for {!r}'.format(feature))
+
         module, provider = provider_map[feature]
         return provider(module, **params)
+
+
+def _parameter_injectable(parameter: inspect.Parameter):
+    return parameter.kind == inspect.Parameter.KEYWORD_ONLY
 
 
 class Dependencies(object):
@@ -179,8 +190,12 @@ class Dependencies(object):
         self.injector = injector
         self.func = func
 
+        self.signature = inspect.signature(func)
+
         self.dependency_params = {}
         self.dependencies = {}
+        self.defaults = {kwarg: param.default
+                         for kwarg, param in self.signature.parameters.items()}
 
     def __repr__(self):
         params = ", ".join([
@@ -201,10 +216,8 @@ class Dependencies(object):
                               .update(params)
 
     def inspect_dependencies(self):
-        signature = inspect.signature(self.func)
-
-        for kwarg, parameter in signature.parameters.items():
-            if parameter.kind != inspect.Parameter.KEYWORD_ONLY\
+        for kwarg, parameter in self.signature.parameters.items():
+            if not _parameter_injectable(parameter)\
                or parameter.annotation == inspect.Parameter.empty:
                 continue
 
@@ -218,7 +231,10 @@ class Dependencies(object):
                 # Dependency already provided explicitly
                 continue
             params = self.dependency_params.get(kwarg, {})
-            output[kwarg] = self.injector.get(feature, params)
+            output[kwarg] = self.injector.get(
+                feature,
+                params=params,
+                default=self.defaults.get(kwarg, UNSET))
 
         return output
 
@@ -243,7 +259,10 @@ class AsyncDependencies(Dependencies):
             try:
                 futures[kwarg] = self.injector.get_async(feature, params)
             except NoProvider:
-                output[kwarg] = self.injector.get(feature, params)
+                output[kwarg] = self.injector.get(
+                    feature,
+                    params=params,
+                    default=self.defaults.get(kwarg, UNSET))
 
         for k, v in futures.items():
             output[k] = await v

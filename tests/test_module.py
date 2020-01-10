@@ -53,14 +53,9 @@ def test_inheritance():
         async def p_async_int(self) -> int:
             return 2
 
-    assert MyModule.providers == {
-        str: AModule.p_str,
-        int: MyModule.p_int
-    }
+    assert MyModule.providers == {str: AModule.p_str, int: MyModule.p_int}
 
-    assert MyModule.async_providers == {
-        int: MyModule.p_async_int
-    }
+    assert MyModule.async_providers == {int: MyModule.p_async_int}
 
 
 def test_decorator():

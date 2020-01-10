@@ -21,9 +21,11 @@ class Injector(object):
     # providers: SyncProviderMap
     # async_providers: AsyncProviderMap
 
-    def __init__(self,
-                 _sync_dep_klass: t.Type['Dependency'] = None,
-                 _async_dep_klass: t.Type['Dependency'] = None):
+    def __init__(
+        self,
+        _sync_dep_klass: t.Type["Dependency"] = None,
+        _async_dep_klass: t.Type["Dependency"] = None,
+    ):
         self.modules = []
         self.providers = {}
         self.async_providers = {}
@@ -77,7 +79,7 @@ class Injector(object):
 
         Note: This does not specify which dependencies to inject.
         """
-        if hasattr(func, '__dependencies__'):
+        if hasattr(func, "__dependencies__"):
             return func
 
         if asyncio.iscoroutinefunction(func):
@@ -119,11 +121,13 @@ class Injector(object):
         >>>     assert isinstance(a_frob, Frob)
         >>>
         """
+
         def wrapper(func: FuncType) -> FuncType:
             func = self.wrap_dependent(func)
             for kwarg, feature in mapping.items():
                 func.__dependencies__.add_dependency(kwarg, feature)
             return func
+
         return wrapper
 
     def param(self, kwarg, __feature=None, **params) -> Decorator:
@@ -145,12 +149,14 @@ class Injector(object):
         >>>     assert a_frob.frobulation == 'high'
         >>>
         """
+
         def wrapper(func: FuncType) -> FuncType:
             func = self.wrap_dependent(func)
             if __feature:
                 func.__dependencies__.add_dependency(kwarg, __feature)
             func.__dependencies__.add_params(kwarg, params)
             return func
+
         return wrapper
 
     def get(self, feature, params=None, default=UNSET):
@@ -160,7 +166,7 @@ class Injector(object):
         provider_map = self.providers
         if feature not in provider_map:
             if default is UNSET:
-                raise NoProvider('No provider for {!r}'.format(feature))
+                raise NoProvider("No provider for {!r}".format(feature))
             else:
                 return default
 
@@ -171,7 +177,7 @@ class Injector(object):
         """Get the resolved async dependency for `feature`."""
         provider_map = self.async_providers
         if feature not in provider_map:
-            raise NoProvider('No provider for {!r}'.format(feature))
+            raise NoProvider("No provider for {!r}".format(feature))
 
         module, provider = provider_map[feature]
         return provider(module, **params)
@@ -194,31 +200,30 @@ class Dependencies(object):
 
         self.dependency_params = {}
         self.dependencies = {}
-        self.defaults = {kwarg: param.default
-                         for kwarg, param in self.signature.parameters.items()}
+        self.defaults = {
+            kwarg: param.default for kwarg, param in self.signature.parameters.items()
+        }
 
     def __repr__(self):
-        params = ", ".join([
-            "{}={!r}".format(k, v)
-            for k, v in self.dependency_params
-        ])
+        params = ", ".join(["{}={!r}".format(k, v) for k, v in self.dependency_params])
         return "<injected {self.func.__name__} ({params})>".format(
-            self=self, params=params)
+            self=self, params=params
+        )
 
     def add_dependency(self, kwarg: str, feature) -> None:
         if kwarg in self.dependencies:
-            raise RuntimeError('Dependency for kwarg {!r} exists'.format(
-                kwarg))
+            raise RuntimeError("Dependency for kwarg {!r} exists".format(kwarg))
         self.dependencies[kwarg] = feature
 
     def add_params(self, kwarg, params):
-        self.dependency_params.setdefault(kwarg, {})\
-                              .update(params)
+        self.dependency_params.setdefault(kwarg, {}).update(params)
 
     def inspect_dependencies(self):
         for kwarg, parameter in self.signature.parameters.items():
-            if not _parameter_injectable(parameter)\
-               or parameter.annotation == inspect.Parameter.empty:
+            if (
+                not _parameter_injectable(parameter)
+                or parameter.annotation == inspect.Parameter.empty
+            ):
                 continue
 
             self.dependencies[kwarg] = parameter.annotation
@@ -232,9 +237,8 @@ class Dependencies(object):
                 continue
             params = self.dependency_params.get(kwarg, {})
             output[kwarg] = self.injector.get(
-                feature,
-                params=params,
-                default=self.defaults.get(kwarg, UNSET))
+                feature, params=params, default=self.defaults.get(kwarg, UNSET)
+            )
 
         return output
 
@@ -260,9 +264,8 @@ class AsyncDependencies(Dependencies):
                 futures[kwarg] = self.injector.get_async(feature, params)
             except NoProvider:
                 output[kwarg] = self.injector.get(
-                    feature,
-                    params=params,
-                    default=self.defaults.get(kwarg, UNSET))
+                    feature, params=params, default=self.defaults.get(kwarg, UNSET)
+                )
 
         for k, v in futures.items():
             output[k] = await v
@@ -271,4 +274,4 @@ class AsyncDependencies(Dependencies):
 
     async def call_injected(self, *args, **kwargs) -> t.Any:
         kwargs.update(await self.resolve_dependencies(kwargs))
-        return (await self.func(*args, **kwargs))
+        return await self.func(*args, **kwargs)

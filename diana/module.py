@@ -3,7 +3,7 @@ import asyncio
 import typing as t
 
 
-Feature = t.TypeVar('Feature')
+Feature = t.TypeVar("Feature")
 SyncFeatureProvider = t.Callable[..., Feature]
 AsyncFeatureProvider = t.Callable[..., t.Awaitable[Feature]]
 FeatureProvider = t.Union[SyncFeatureProvider, AsyncFeatureProvider]
@@ -12,7 +12,7 @@ SyncProviderMap = t.Dict[Feature, SyncFeatureProvider]
 AsyncProviderMap = t.Dict[Feature, AsyncFeatureProvider]
 
 FuncType = t.Callable[..., t.Any]
-F = t.TypeVar('F', bound=FuncType)
+F = t.TypeVar("F", bound=FuncType)
 
 if t.TYPE_CHECKING:
     from .injector import Injector  # noqa
@@ -32,6 +32,7 @@ def provides(feature: Feature):
     def _decorator(func: FeatureProvider) -> FeatureProvider:
         mark_provides(func, feature)
         return func
+
     return _decorator
 
 
@@ -46,14 +47,14 @@ class ModuleMeta(type):
                 async_providers.update(async_providers)
 
         for attr in attrs.values():
-            if hasattr(attr, '__provides__'):
+            if hasattr(attr, "__provides__"):
                 if asyncio.iscoroutinefunction(attr):
                     async_providers[attr.__provides__] = attr
                 else:
                     providers[attr.__provides__] = attr
 
-        attrs['providers'] = providers
-        attrs['async_providers'] = async_providers
+        attrs["providers"] = providers
+        attrs["async_providers"] = async_providers
 
         return super().__new__(mcls, name, bases, attrs)
 
@@ -72,12 +73,13 @@ class Module(metaclass=ModuleMeta):
         def _decorator(func: FeatureProvider) -> FeatureProvider:
             cls.register(func, feature)
             return func
+
         return _decorator
 
     @classmethod
-    def register(cls,
-                 func: FeatureProvider,
-                 feature: t.Optional[Feature]=None) -> None:
+    def register(
+        cls, func: FeatureProvider, feature: t.Optional[Feature] = None
+    ) -> None:
         """Register `func` to be a provider for `feature`.
 
         If `feature` is `None`, the feature's return annotation will be
@@ -93,8 +95,8 @@ class Module(metaclass=ModuleMeta):
         else:
             cls.providers[func.__provides__] = func
 
-    def load(self, injector: 'Injector'):
+    def load(self, injector: "Injector"):
         pass
 
-    def unload(self, injector: 'Injector'):
+    def unload(self, injector: "Injector"):
         pass

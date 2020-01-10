@@ -6,7 +6,7 @@ from diana.module import Module, provider
 LENGTH = 3
 
 INT_VALUE = 1
-STR_VALUE = 'x'
+STR_VALUE = "x"
 
 pytestmark = pytest.mark.asyncio
 
@@ -38,15 +38,11 @@ class AltModuleAsync(Module):
         return False
 
 
-@pytest.fixture(params=[
-    (ModuleSync,),
-    (ModuleAsync,),
-    (ModuleSync, ModuleAsync),
-])
+@pytest.fixture(
+    params=[(ModuleSync,), (ModuleAsync,), (ModuleSync, ModuleAsync),]
+)
 def modules(request):
-    return [
-        module_cls()
-        for module_cls in request.param]
+    return [module_cls() for module_cls in request.param]
 
 
 @pytest.fixture
@@ -56,14 +52,16 @@ def injector(modules):
     return injector
 
 
-@pytest.fixture(params=['__call__', 'inject'])
+@pytest.fixture(params=["__call__", "inject"])
 def basic_injected_function(request, injector):
-    if request.param == '__call__':
+    if request.param == "__call__":
+
         @injector
         async def requires_int(*, an_int: int):
             return an_int
 
-    elif request.param == 'inject':
+    elif request.param == "inject":
+
         @injector.inject(an_int=int)
         async def requires_int(an_int):
             return an_int
@@ -71,14 +69,16 @@ def basic_injected_function(request, injector):
     return requires_int
 
 
-@pytest.fixture(params=['__call__', 'inject'])
+@pytest.fixture(params=["__call__", "inject"])
 def defaulted_injected_function(request, injector):
-    if request.param == '__call__':
+    if request.param == "__call__":
+
         @injector
         async def requires_bool(*, a_bool: bool = False):
             return a_bool
 
-    elif request.param == 'inject':
+    elif request.param == "inject":
+
         @injector.inject(a_bool=bool)
         async def requires_bool(a_bool=False):
             return a_bool
@@ -86,22 +86,25 @@ def defaulted_injected_function(request, injector):
     return requires_bool
 
 
-@pytest.fixture(params=['__call__', 'inject', 'param'])
+@pytest.fixture(params=["__call__", "inject", "param"])
 def parametrized_injected_function(request, injector):
-    if request.param == '__call__':
+    if request.param == "__call__":
+
         @injector
-        @injector.param('a_str', length=LENGTH)
+        @injector.param("a_str", length=LENGTH)
         async def requires_str(*, a_str: str):
             return a_str
 
-    elif request.param == 'inject':
+    elif request.param == "inject":
+
         @injector.inject(a_str=str)
-        @injector.param('a_str', length=LENGTH)
+        @injector.param("a_str", length=LENGTH)
         async def requires_str(a_str):
             return a_str
 
-    elif request.param == 'param':
-        @injector.param('a_str', str, length=LENGTH)
+    elif request.param == "param":
+
+        @injector.param("a_str", str, length=LENGTH)
         async def requires_str(a_str):
             return a_str
 
@@ -125,13 +128,13 @@ async def test_provided_defaults(defaulted_injected_function):
     assert (await defaulted_injected_function(a_bool=True)) == True
 
 
-@pytest.mark.parametrize('modules', [(AltModuleAsync,)], indirect=True)
+@pytest.mark.parametrize("modules", [(AltModuleAsync,)], indirect=True)
 async def test_missing_dependency(injector, basic_injected_function):
     with pytest.raises(RuntimeError):
         await basic_injected_function()
 
 
-@pytest.mark.parametrize('modules', [(AltModuleAsync,)], indirect=True)
+@pytest.mark.parametrize("modules", [(AltModuleAsync,)], indirect=True)
 async def test_missing_dependency_provided(injector, basic_injected_function):
     assert (await basic_injected_function(an_int=99)) == 99
 

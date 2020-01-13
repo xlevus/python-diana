@@ -2,6 +2,7 @@ import inspect
 import functools
 import asyncio
 import typing as t
+import contextlib
 
 from .module import Module
 
@@ -159,7 +160,7 @@ class Injector(object):
 
         return wrapper
 
-    def get(self, feature, params=None, default=UNSET):
+    def _get(self, feature, params=None, default=UNSET):
         """Get the resolved dependency for `feature`."""
         params = params or {}
 
@@ -168,19 +169,33 @@ class Injector(object):
             if default is UNSET:
                 raise NoProvider("No provider for {!r}".format(feature))
             else:
-                return default
+                return default, False
 
         module, provider = provider_map[feature]
-        return provider(module, **params)
+        return (
+            provider(module, **params),
+            getattr(provider, "__contextprovider__", False),
+        )
 
-    def get_async(self, feature, params=None):
+    def get(self, feature, params=None, default=UNSET):
+        dep, _ = self._get(feature, params, default)
+        return dep
+
+    def _get_async(self, feature, params=None):
         """Get the resolved async dependency for `feature`."""
         provider_map = self.async_providers
         if feature not in provider_map:
             raise NoProvider("No provider for {!r}".format(feature))
 
         module, provider = provider_map[feature]
-        return provider(module, **params)
+        return (
+            provider(module, **params),
+            getattr(provider, "__contextprovider__", False),
+        )
+
+    def get_async(self, feature, params=None):
+        dep, _ = self._get_async(feature, params)
+        return dep
 
 
 def _parameter_injectable(parameter: inspect.Parameter):
@@ -231,16 +246,23 @@ class Dependencies(object):
     def resolve_dependencies(self, called_kwargs):
         output = {}
 
-        for kwarg, feature in self.dependencies.items():
-            if kwarg in called_kwargs:
-                # Dependency already provided explicitly
-                continue
-            params = self.dependency_params.get(kwarg, {})
-            output[kwarg] = self.injector.get(
-                feature, params=params, default=self.defaults.get(kwarg, UNSET)
-            )
+        with contextlib.ExitStack() as stack:
 
-        return output
+            for kwarg, feature in self.dependencies.items():
+                if kwarg in called_kwargs:
+                    # Dependency already provided explicitly
+                    continue
+                params = self.dependency_params.get(kwarg, {})
+                default = self.defaults.get(kwarg, UNSET)
+
+                dep, isctx = self.injector._get(feature, params=params, default=default)
+
+                if isctx:
+                    dep = stack.enter_context(dep)
+
+                output[kwarg] = dep
+
+            return output
 
     def call_injected(self, *args, **kwargs) -> t.Any:
         kwargs.update(self.resolve_dependencies(kwargs))
@@ -255,20 +277,28 @@ class AsyncDependencies(Dependencies):
         output = {}
         futures = {}
 
-        for kwarg, feature in self.dependencies.items():
-            if kwarg in called_kwargs:
-                continue
+        async with contextlib.AsyncExitStack() as stack:
+            for kwarg, feature in self.dependencies.items():
+                if kwarg in called_kwargs:
+                    continue
 
-            params = self.dependency_params.get(kwarg, {})
-            try:
-                futures[kwarg] = self.injector.get_async(feature, params)
-            except NoProvider:
-                output[kwarg] = self.injector.get(
-                    feature, params=params, default=self.defaults.get(kwarg, UNSET)
-                )
+                params = self.dependency_params.get(kwarg, {})
+                try:
+                    dep, isctx = self.injector._get_async(feature, params)
+                    if isctx:
+                        dep = stack.enter_async_context(dep)
+                    futures[kwarg] = dep
 
-        for k, v in futures.items():
-            output[k] = await v
+                except NoProvider:
+                    dep, isctx = self.injector._get(
+                        feature, params=params, default=self.defaults.get(kwarg, UNSET)
+                    )
+                    if isctx:
+                        dep = stack.enter_context(dep)
+                    output[kwarg] = dep
+
+            for k, v in futures.items():
+                output[k] = await v
 
         return output
 

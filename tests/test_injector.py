@@ -6,23 +6,23 @@ from diana.module import Module, provider
 LENGTH = 3
 
 INT_VALUE = 1
-STR_VALUE = 'x'
+STR_VALUE = "x"
 
 
 def assert_wrapped(wrapped_func):
-    assert hasattr(wrapped_func, '__dependencies__')
+    assert hasattr(wrapped_func, "__dependencies__")
     source_func = wrapped_func.__wrapped__
 
     assert wrapped_func.__doc__ == source_func.__doc__
     assert wrapped_func.__name__ == source_func.__name__
 
     # Some libraries inspect __code__ directly.
-    assert hasattr(wrapped_func, '__code__')
+    assert hasattr(wrapped_func, "__code__")
 
-    if hasattr(source_func, '__module__'):
+    if hasattr(source_func, "__module__"):
         assert wrapped_func.__module__ == source_func.__module__
 
-    if hasattr(source_func, '__annotations__'):
+    if hasattr(source_func, "__annotations__"):
         assert wrapped_func.__annotations__ == source_func.__annotations__
 
 
@@ -43,13 +43,9 @@ class AltModuleSync(Module):
         return False
 
 
-@pytest.fixture(params=[
-    (ModuleSync,)
-])
+@pytest.fixture(params=[(ModuleSync,)])
 def modules(request):
-    return [
-        module_cls()
-        for module_cls in request.param]
+    return [module_cls() for module_cls in request.param]
 
 
 @pytest.fixture
@@ -60,15 +56,17 @@ def injector(modules):
     return injector
 
 
-@pytest.fixture(params=['__call__', 'inject'])
+@pytest.fixture(params=["__call__", "inject"])
 def basic_injected_function(request, injector):
-    if request.param == '__call__':
+    if request.param == "__call__":
+
         @injector
         def requires_int(*, an_int: int):
             """I require an int"""
             return an_int
 
-    elif request.param == 'inject':
+    elif request.param == "inject":
+
         @injector.inject(an_int=int)
         def requires_int(an_int):
             """I require an int"""
@@ -77,42 +75,46 @@ def basic_injected_function(request, injector):
     return requires_int
 
 
-@pytest.fixture(params=['__call__', 'inject'])
+@pytest.fixture(params=["__call__", "inject"])
 def defaulted_injected_function(request, injector):
-    if request.param == '__call__':
+    if request.param == "__call__":
+
         @injector
         def requires_bool(*, a_bool: bool = False):
             """I accept a bool"""
             return a_bool
 
-    elif request.param == 'inject':
+    elif request.param == "inject":
+
         @injector.inject(a_bool=bool)
-        def requires_bool(a_bool = False):
+        def requires_bool(a_bool=False):
             """I accept a bool"""
             return a_bool
 
     return requires_bool
 
 
-
-@pytest.fixture(params=['__call__', 'inject', 'param'])
+@pytest.fixture(params=["__call__", "inject", "param"])
 def parametrized_injected_function(request, injector):
-    if request.param == '__call__':
+    if request.param == "__call__":
+
         @injector
-        @injector.param('a_str', length=LENGTH)
+        @injector.param("a_str", length=LENGTH)
         def requires_str(*, a_str: str):
             """I require a str"""
             return a_str
 
-    elif request.param == 'inject':
+    elif request.param == "inject":
+
         @injector.inject(a_str=str)
-        @injector.param('a_str', length=LENGTH)
+        @injector.param("a_str", length=LENGTH)
         def requires_str(a_str):
             """I require a str"""
             return a_str
 
-    elif request.param == 'param':
-        @injector.param('a_str', str, length=LENGTH)
+    elif request.param == "param":
+
+        @injector.param("a_str", str, length=LENGTH)
         def requires_str(a_str):
             """I require a str"""
             return a_str
@@ -142,7 +144,6 @@ def test_provided_defaults(defaulted_injected_function):
 
 
 def test_module_dependencies(injector):
-
     class DependentModule(Module):
         @provider
         @injector.inject(a_int=int)
@@ -158,20 +159,15 @@ def test_module_dependencies(injector):
     assert requires_float() == float(INT_VALUE)
 
 
-@pytest.mark.parametrize('modules', [
-    (AltModuleSync,),
-], indirect=True)
+@pytest.mark.parametrize("modules", [(AltModuleSync,),], indirect=True)
 def test_missing_dependency(injector, basic_injected_function):
     with pytest.raises(RuntimeError):
         basic_injected_function()
 
 
-@pytest.mark.parametrize('modules', [
-    (AltModuleSync,),
-], indirect=True)
+@pytest.mark.parametrize("modules", [(AltModuleSync,),], indirect=True)
 def test_missing_dependency_provided(injector, basic_injected_function):
     assert basic_injected_function(an_int=99) == 99
-
 
 
 def test_module_unloading(injector):

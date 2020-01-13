@@ -2,6 +2,7 @@ import inspect
 import functools
 import asyncio
 import typing as t
+import contextlib
 
 from .module import Module
 
@@ -21,9 +22,11 @@ class Injector(object):
     # providers: SyncProviderMap
     # async_providers: AsyncProviderMap
 
-    def __init__(self,
-                 _sync_dep_klass: t.Type['Dependency'] = None,
-                 _async_dep_klass: t.Type['Dependency'] = None):
+    def __init__(
+        self,
+        _sync_dep_klass: t.Type["Dependency"] = None,
+        _async_dep_klass: t.Type["Dependency"] = None,
+    ):
         self.modules = []
         self.providers = {}
         self.async_providers = {}
@@ -77,7 +80,7 @@ class Injector(object):
 
         Note: This does not specify which dependencies to inject.
         """
-        if hasattr(func, '__dependencies__'):
+        if hasattr(func, "__dependencies__"):
             return func
 
         if asyncio.iscoroutinefunction(func):
@@ -119,11 +122,13 @@ class Injector(object):
         >>>     assert isinstance(a_frob, Frob)
         >>>
         """
+
         def wrapper(func: FuncType) -> FuncType:
             func = self.wrap_dependent(func)
             for kwarg, feature in mapping.items():
                 func.__dependencies__.add_dependency(kwarg, feature)
             return func
+
         return wrapper
 
     def param(self, kwarg, __feature=None, **params) -> Decorator:
@@ -145,36 +150,52 @@ class Injector(object):
         >>>     assert a_frob.frobulation == 'high'
         >>>
         """
+
         def wrapper(func: FuncType) -> FuncType:
             func = self.wrap_dependent(func)
             if __feature:
                 func.__dependencies__.add_dependency(kwarg, __feature)
             func.__dependencies__.add_params(kwarg, params)
             return func
+
         return wrapper
 
-    def get(self, feature, params=None, default=UNSET):
+    def _get(self, feature, params=None, default=UNSET):
         """Get the resolved dependency for `feature`."""
         params = params or {}
 
         provider_map = self.providers
         if feature not in provider_map:
             if default is UNSET:
-                raise NoProvider('No provider for {!r}'.format(feature))
+                raise NoProvider("No provider for {!r}".format(feature))
             else:
-                return default
+                return default, False
 
         module, provider = provider_map[feature]
-        return provider(module, **params)
+        return (
+            provider(module, **params),
+            getattr(provider, "__contextprovider__", False),
+        )
 
-    def get_async(self, feature, params=None):
+    def get(self, feature, params=None, default=UNSET):
+        dep, _ = self._get(feature, params, default)
+        return dep
+
+    def _get_async(self, feature, params=None):
         """Get the resolved async dependency for `feature`."""
         provider_map = self.async_providers
         if feature not in provider_map:
-            raise NoProvider('No provider for {!r}'.format(feature))
+            raise NoProvider("No provider for {!r}".format(feature))
 
         module, provider = provider_map[feature]
-        return provider(module, **params)
+        return (
+            provider(module, **params),
+            getattr(provider, "__contextprovider__", False),
+        )
+
+    def get_async(self, feature, params=None):
+        dep, _ = self._get_async(feature, params)
+        return dep
 
 
 def _parameter_injectable(parameter: inspect.Parameter):
@@ -194,31 +215,30 @@ class Dependencies(object):
 
         self.dependency_params = {}
         self.dependencies = {}
-        self.defaults = {kwarg: param.default
-                         for kwarg, param in self.signature.parameters.items()}
+        self.defaults = {
+            kwarg: param.default for kwarg, param in self.signature.parameters.items()
+        }
 
     def __repr__(self):
-        params = ", ".join([
-            "{}={!r}".format(k, v)
-            for k, v in self.dependency_params
-        ])
+        params = ", ".join(["{}={!r}".format(k, v) for k, v in self.dependency_params])
         return "<injected {self.func.__name__} ({params})>".format(
-            self=self, params=params)
+            self=self, params=params
+        )
 
     def add_dependency(self, kwarg: str, feature) -> None:
         if kwarg in self.dependencies:
-            raise RuntimeError('Dependency for kwarg {!r} exists'.format(
-                kwarg))
+            raise RuntimeError("Dependency for kwarg {!r} exists".format(kwarg))
         self.dependencies[kwarg] = feature
 
     def add_params(self, kwarg, params):
-        self.dependency_params.setdefault(kwarg, {})\
-                              .update(params)
+        self.dependency_params.setdefault(kwarg, {}).update(params)
 
     def inspect_dependencies(self):
         for kwarg, parameter in self.signature.parameters.items():
-            if not _parameter_injectable(parameter)\
-               or parameter.annotation == inspect.Parameter.empty:
+            if (
+                not _parameter_injectable(parameter)
+                or parameter.annotation == inspect.Parameter.empty
+            ):
                 continue
 
             self.dependencies[kwarg] = parameter.annotation
@@ -226,17 +246,23 @@ class Dependencies(object):
     def resolve_dependencies(self, called_kwargs):
         output = {}
 
-        for kwarg, feature in self.dependencies.items():
-            if kwarg in called_kwargs:
-                # Dependency already provided explicitly
-                continue
-            params = self.dependency_params.get(kwarg, {})
-            output[kwarg] = self.injector.get(
-                feature,
-                params=params,
-                default=self.defaults.get(kwarg, UNSET))
+        with contextlib.ExitStack() as stack:
 
-        return output
+            for kwarg, feature in self.dependencies.items():
+                if kwarg in called_kwargs:
+                    # Dependency already provided explicitly
+                    continue
+                params = self.dependency_params.get(kwarg, {})
+                default = self.defaults.get(kwarg, UNSET)
+
+                dep, isctx = self.injector._get(feature, params=params, default=default)
+
+                if isctx:
+                    dep = stack.enter_context(dep)
+
+                output[kwarg] = dep
+
+            return output
 
     def call_injected(self, *args, **kwargs) -> t.Any:
         kwargs.update(self.resolve_dependencies(kwargs))
@@ -251,24 +277,31 @@ class AsyncDependencies(Dependencies):
         output = {}
         futures = {}
 
-        for kwarg, feature in self.dependencies.items():
-            if kwarg in called_kwargs:
-                continue
+        async with contextlib.AsyncExitStack() as stack:
+            for kwarg, feature in self.dependencies.items():
+                if kwarg in called_kwargs:
+                    continue
 
-            params = self.dependency_params.get(kwarg, {})
-            try:
-                futures[kwarg] = self.injector.get_async(feature, params)
-            except NoProvider:
-                output[kwarg] = self.injector.get(
-                    feature,
-                    params=params,
-                    default=self.defaults.get(kwarg, UNSET))
+                params = self.dependency_params.get(kwarg, {})
+                try:
+                    dep, isctx = self.injector._get_async(feature, params)
+                    if isctx:
+                        dep = stack.enter_async_context(dep)
+                    futures[kwarg] = dep
 
-        for k, v in futures.items():
-            output[k] = await v
+                except NoProvider:
+                    dep, isctx = self.injector._get(
+                        feature, params=params, default=self.defaults.get(kwarg, UNSET)
+                    )
+                    if isctx:
+                        dep = stack.enter_context(dep)
+                    output[kwarg] = dep
+
+            for k, v in futures.items():
+                output[k] = await v
 
         return output
 
     async def call_injected(self, *args, **kwargs) -> t.Any:
         kwargs.update(await self.resolve_dependencies(kwargs))
-        return (await self.func(*args, **kwargs))
+        return await self.func(*args, **kwargs)

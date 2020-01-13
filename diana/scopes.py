@@ -1,4 +1,3 @@
-
 class Scope(object):
     """Default scope.
 
@@ -7,6 +6,7 @@ class Scope(object):
 
     :param factory: A factory method.
     :param value: A constant value."""
+
     def __init__(self, factory=None, value=None):
         self.factory = factory
         self.value = value
@@ -22,6 +22,7 @@ class Const(Scope):
 
     Factory will be invocated on initial dependency requirement.
     Subsequent requirements will return the same value."""
+
     def get(self):
         if not self.value:
             self.value = self.factory()

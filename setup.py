@@ -8,7 +8,7 @@ def read_init_var(name):
     with open("diana/__init__.py") as f:
         for line in f:
             if line.startswith(prefix):
-                return line.replace(prefix, "").strip().strip("'")
+                return line.replace(prefix, "").strip().strip("'").strip('"')
     raise AssertionError("variable %s not found" % (name,))
 
 

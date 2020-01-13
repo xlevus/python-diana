@@ -13,13 +13,6 @@ Injector
    :members:
 
 
-Scopes
-------
-
-.. autoclass:: diana.scopes.Scope
-.. autoclass:: diana.scopes.Const
-
-
 Indices and tables
 ==================
 

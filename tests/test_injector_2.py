@@ -36,62 +36,66 @@ def module_cls(request, dependency_type, dependency_value):
 
         class MyModule(Module):
             @provider
-            def provide_inspect(self) -> dependency_type:
-                return dependency_value
+            def provide_inspect(self, multiplier=1) -> dependency_type:
+                return dependency_value * multiplier
 
             @provider
-            async def provide_inspect_async(self) -> dependency_type:
-                return dependency_value
+            async def provide_inspect_async(self, multiplier=1) -> dependency_type:
+                return dependency_value * multiplier
 
     elif request.param == "decorator":
 
         class MyModule(Module):
             @provides(dependency_type)
-            def provide_decorator(self):
-                return dependency_value
+            def provide_decorator(self, multiplier=1):
+                return dependency_value * multiplier
 
             @provides(dependency_type)
-            async def provide_decorator_async(self):
-                return dependency_value
+            async def provide_decorator_async(self, multiplier=1):
+                return dependency_value * multiplier
 
     elif request.param == "context_inspect":
 
         class MyModule(Module):
             @contextprovider
             @contextlib.contextmanager
-            def provide_context_inspect(self) -> dependency_type:
-                yield dependency_value
+            def provide_context_inspect(self, multiplier=1) -> dependency_type:
+                yield dependency_value * multiplier
 
             @contextprovider
             @contextlib.asynccontextmanager
-            async def provide_context_inspect_async(self) -> dependency_type:
-                yield dependency_value
+            async def provide_context_inspect_async(
+                self, multiplier=1
+            ) -> dependency_type:
+                yield dependency_value * multiplier
 
     elif request.param == "context_decorator":
 
         class MyModule(Module):
             @provides(dependency_type, context=True)
             @contextlib.contextmanager
-            def provide_context_decorator(self):
-                yield dependency_value
+            def provide_context_decorator(self, multiplier=1):
+                yield dependency_value * multiplier
 
             @provides(dependency_type, context=True)
             @contextlib.asynccontextmanager
-            async def provide_context_decorator_async(self):
-                yield dependency_value
+            async def provide_context_decorator_async(self, multiplier=1):
+                yield dependency_value * multiplier
 
     elif request.param == "register_inspect":
 
         class MyModule(Module):
             pass
 
-        def provide_register_inspect(injector) -> dependency_type:
-            return dependency_value
+        def provide_register_inspect(injector, multiplier=1) -> dependency_type:
+            return dependency_value * multiplier
 
         MyModule.register(provide_register_inspect)
 
-        async def provide_register_inspect_async(injector) -> dependency_type:
-            return dependency_value
+        async def provide_register_inspect_async(
+            injector, multiplier=1
+        ) -> dependency_type:
+            return dependency_value * multiplier
 
         MyModule.register(provide_register_inspect_async)
 
@@ -100,13 +104,13 @@ def module_cls(request, dependency_type, dependency_value):
         class MyModule(Module):
             pass
 
-        def provide_register(injector):
-            return dependency_value
+        def provide_register(injector, multiplier=1):
+            return dependency_value * multiplier
 
         MyModule.register(provide_register, dependency_type)
 
-        async def provide_register_async(injector):
-            return dependency_value
+        async def provide_register_async(injector, multiplier=1):
+            return dependency_value * multiplier
 
         MyModule.register(provide_register_async, dependency_type)
 

@@ -128,12 +128,18 @@ def injector(module):
     return injector
 
 
-@pytest.fixture(params=["inspect"])
+@pytest.fixture(params=["inspect", "explicit"])
 def inject_target(request, injector, dependency_type, dependency_value):
     if request.param == "inspect":
 
         @injector
         def target(*, value: dependency_type) -> dependency_type:
+            return value
+
+    elif request.param == "explicit":
+
+        @injector.inject(value=dependency_type)
+        def target(*, value) -> dependency_type:
             return value
 
     else:
@@ -142,12 +148,18 @@ def inject_target(request, injector, dependency_type, dependency_value):
     return target
 
 
-@pytest.fixture(params=["inspect"])
+@pytest.fixture(params=["inspect", "explicit"])
 def inject_target_async(request, injector, dependency_type, dependency_value):
     if request.param == "inspect":
 
         @injector
         async def target(*, value: dependency_type) -> dependency_type:
+            return value
+
+    elif request.param == "explicit":
+
+        @injector.inject(value=dependency_type)
+        async def target(*, value) -> dependency_type:
             return value
 
     else:

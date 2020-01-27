@@ -133,47 +133,98 @@ def injector(module):
 
 
 @pytest.fixture(params=["inspect", "explicit"])
-def inject_target(request, injector, dependency_type, dependency_value):
-    if request.param == "inspect":
+def target_style(request):
+    return request.param
+
+
+@pytest.fixture(params=["", "param"])
+def target_param(request):
+    return request.param
+
+
+@pytest.fixture
+def inject_target(
+    target_style, target_param, injector, dependency_type, dependency_value
+):
+    key = (target_style, target_param)
+
+    if key == ("inspect", ""):
 
         @injector
         def target(*, value: dependency_type) -> dependency_type:
             return value
 
-    elif request.param == "explicit":
+    elif key == ("explicit", ""):
 
         @injector.inject(value=dependency_type)
         def target(*, value) -> dependency_type:
             return value
 
+    elif key == ("inspect", "param"):
+
+        @injector
+        @injector.param("value", multiplier=5)
+        def target(*, value: dependency_type) -> dependency_type:
+            return value
+
+    elif key == ("explicit", "param"):
+
+        @injector.inject(value=dependency_type)
+        @injector.param("value", multiplier=5)
+        def target(*, value: dependency_type):
+            return value
+
     else:
-        raise RuntimeError("Cannot do " + request.param)
+        raise RuntimeError("Cannot do " + key)
 
     return target
 
 
-@pytest.fixture(params=["inspect", "explicit"])
-def inject_target_async(request, injector, dependency_type, dependency_value):
-    if request.param == "inspect":
+@pytest.fixture
+def inject_target_async(
+    target_style, target_param, injector, dependency_type, dependency_value
+):
+    key = (target_style, target_param)
+
+    if key == ("inspect", ""):
 
         @injector
         async def target(*, value: dependency_type) -> dependency_type:
             return value
 
-    elif request.param == "explicit":
+    elif key == ("explicit", ""):
 
         @injector.inject(value=dependency_type)
         async def target(*, value) -> dependency_type:
             return value
 
+    elif key == ("inspect", "param"):
+
+        @injector
+        @injector.param("value", multiplier=5)
+        async def target(*, value: dependency_type) -> dependency_type:
+            return value
+
+    elif key == ("explicit", "param"):
+
+        @injector.inject(value=dependency_type)
+        @injector.param("value", multiplier=5)
+        async def target(*, value: dependency_type):
+            return value
+
     else:
-        raise RuntimeError("Cannot do " + request.param)
+        raise RuntimeError("Cannot do " + key)
 
     return target
 
 
-def test_inject(dependency_value, inject_target):
-    assert inject_target() == dependency_value
+def test_inject(dependency_value, inject_target, target_param):
+    if target_param:
+        expected_value = dependency_value * 5
+    else:
+        expected_value = dependency_value
+
+    assert inject_target() == expected_value
 
 
 def test_use_provided_value(inject_target):
@@ -182,5 +233,10 @@ def test_use_provided_value(inject_target):
 
 
 @pytest.mark.asyncio
-async def test_inject_async(dependency_value, inject_target_async):
-    assert (await inject_target_async()) == dependency_value
+async def test_inject_async(dependency_value, inject_target_async, target_param):
+    if target_param:
+        expected_value = dependency_value * 5
+    else:
+        expected_value = dependency_value
+
+    assert (await inject_target_async()) == expected_value

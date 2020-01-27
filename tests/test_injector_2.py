@@ -36,22 +36,22 @@ def module_cls(request, dependency_type, dependency_value):
 
         class MyModule(Module):
             @provider
-            def provide(self) -> dependency_type:
+            def provide_inspect(self) -> dependency_type:
                 return dependency_value
 
             @provider
-            async def provide_async(self) -> dependency_type:
+            async def provide_inspect_async(self) -> dependency_type:
                 return dependency_value
 
     elif request.param == "decorator":
 
         class MyModule(Module):
             @provides(dependency_type)
-            def provide(self):
+            def provide_decorator(self):
                 return dependency_value
 
             @provides(dependency_type)
-            async def provide_async(self):
+            async def provide_decorator_async(self):
                 return dependency_value
 
     elif request.param == "context_inspect":
@@ -59,12 +59,12 @@ def module_cls(request, dependency_type, dependency_value):
         class MyModule(Module):
             @contextprovider
             @contextlib.contextmanager
-            def provide(self) -> dependency_type:
+            def provide_context_inspect(self) -> dependency_type:
                 yield dependency_value
 
             @contextprovider
             @contextlib.asynccontextmanager
-            async def provide_async(self) -> dependency_type:
+            async def provide_context_inspect_async(self) -> dependency_type:
                 yield dependency_value
 
     elif request.param == "context_decorator":
@@ -72,12 +72,12 @@ def module_cls(request, dependency_type, dependency_value):
         class MyModule(Module):
             @provides(dependency_type, context=True)
             @contextlib.contextmanager
-            def provide(self):
+            def provide_context_decorator(self):
                 yield dependency_value
 
             @provides(dependency_type, context=True)
             @contextlib.asynccontextmanager
-            async def provide_async(self):
+            async def provide_context_decorator_async(self):
                 yield dependency_value
 
     elif request.param == "register_inspect":
@@ -85,30 +85,30 @@ def module_cls(request, dependency_type, dependency_value):
         class MyModule(Module):
             pass
 
-        def provide(injector) -> dependency_type:
+        def provide_register_inspect(injector) -> dependency_type:
             return dependency_value
 
-        MyModule.register(provide)
+        MyModule.register(provide_register_inspect)
 
-        async def provide_async(injector) -> dependency_type:
+        async def provide_register_inspect_async(injector) -> dependency_type:
             return dependency_value
 
-        MyModule.register(provide_async)
+        MyModule.register(provide_register_inspect_async)
 
     elif request.param == "register":
 
         class MyModule(Module):
             pass
 
-        def provide(injector):
+        def provide_register(injector):
             return dependency_value
 
-        MyModule.register(provide, dependency_type)
+        MyModule.register(provide_register, dependency_type)
 
-        async def provide_async(injector):
+        async def provide_register_async(injector):
             return dependency_value
 
-        MyModule.register(provide_async, dependency_type)
+        MyModule.register(provide_register_async, dependency_type)
 
     else:
         raise RuntimeError("Cannot do " + request.param)

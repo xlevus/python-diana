@@ -243,65 +243,64 @@ class Dependencies(object):
 
             self.dependencies[kwarg] = parameter.annotation
 
-    def resolve_dependencies(self, called_kwargs):
+    def resolve_dependencies(self, called_kwargs, stack):
         output = {}
 
-        with contextlib.ExitStack() as stack:
+        for kwarg, feature in self.dependencies.items():
+            if kwarg in called_kwargs:
+                # Dependency already provided explicitly
+                continue
+            params = self.dependency_params.get(kwarg, {})
+            default = self.defaults.get(kwarg, UNSET)
 
-            for kwarg, feature in self.dependencies.items():
-                if kwarg in called_kwargs:
-                    # Dependency already provided explicitly
-                    continue
-                params = self.dependency_params.get(kwarg, {})
-                default = self.defaults.get(kwarg, UNSET)
+            dep, isctx = self.injector._get(feature, params=params, default=default)
 
-                dep, isctx = self.injector._get(feature, params=params, default=default)
+            if isctx:
+                dep = stack.enter_context(dep)
 
-                if isctx:
-                    dep = stack.enter_context(dep)
+            output[kwarg] = dep
 
-                output[kwarg] = dep
-
-            return output
+        return output
 
     def call_injected(self, *args, **kwargs) -> t.Any:
-        kwargs.update(self.resolve_dependencies(kwargs))
-        return self.func(*args, **kwargs)
+        with contextlib.ExitStack() as stack:
+            kwargs.update(self.resolve_dependencies(kwargs, stack))
+            return self.func(*args, **kwargs)
 
 
 class AsyncDependencies(Dependencies):
     """Container class to manage dependencies for an injected async function.
     """
 
-    async def resolve_dependencies(self, called_kwargs):
+    async def resolve_dependencies(self, called_kwargs, stack):
         output = {}
         futures = {}
 
-        async with contextlib.AsyncExitStack() as stack:
-            for kwarg, feature in self.dependencies.items():
-                if kwarg in called_kwargs:
-                    continue
+        for kwarg, feature in self.dependencies.items():
+            if kwarg in called_kwargs:
+                continue
 
-                params = self.dependency_params.get(kwarg, {})
-                try:
-                    dep, isctx = self.injector._get_async(feature, params)
-                    if isctx:
-                        dep = stack.enter_async_context(dep)
-                    futures[kwarg] = dep
+            params = self.dependency_params.get(kwarg, {})
+            try:
+                dep, isctx = self.injector._get_async(feature, params)
+                if isctx:
+                    dep = stack.enter_async_context(dep)
+                futures[kwarg] = dep
 
-                except NoProvider:
-                    dep, isctx = self.injector._get(
-                        feature, params=params, default=self.defaults.get(kwarg, UNSET)
-                    )
-                    if isctx:
-                        dep = stack.enter_context(dep)
-                    output[kwarg] = dep
+            except NoProvider:
+                dep, isctx = self.injector._get(
+                    feature, params=params, default=self.defaults.get(kwarg, UNSET)
+                )
+                if isctx:
+                    dep = stack.enter_context(dep)
+                output[kwarg] = dep
 
-            for k, v in futures.items():
-                output[k] = await v
+        for k, v in futures.items():
+            output[k] = await v
 
         return output
 
     async def call_injected(self, *args, **kwargs) -> t.Any:
-        kwargs.update(await self.resolve_dependencies(kwargs))
-        return await self.func(*args, **kwargs)
+        async with contextlib.AsyncExitStack() as stack:
+            kwargs.update(await self.resolve_dependencies(kwargs, stack))
+            return await self.func(*args, **kwargs)

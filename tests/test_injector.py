@@ -1,242 +1,210 @@
+import typing as t
 import contextlib
-from unittest import mock
+from functools import partial
 
 import pytest
+import diana
 
-from diana import Module, Injector, provider, contextprovider, provides
+SYNC = "sync"
+ASYNC = "async"
+RETURN = "return"
+CONTEXT = "context"
+GENERATOR = "generator"
+INSPECT = "inspect"
+EXPLICIT = "explicit"
+DECORATOR = "decorator"
+REGISTER = "register"
+REGISTER_INSPECT = "register_inspect"
 
 
-@pytest.fixture(params=[(int, 1)])
-def dependency(request):
+async def no_op():
+    return
+
+
+@pytest.fixture
+def dep_type():
+    return t.NewType("Dependency", str)
+
+
+@pytest.fixture
+def dep_value(dep_type):
+    return dep_type("-")
+
+
+@pytest.fixture(params=[SYNC, ASYNC])
+def execution_model(request):
+    return request.param
+
+
+@pytest.fixture(params=[RETURN, CONTEXT], ids=lambda x: f"Provider:{x}")
+def _provider_func(request):
     return request.param
 
 
 @pytest.fixture
-def dependency_type(dependency):
-    return dependency[0]
+def provider_func(_provider_func, execution_model, dep_type, dep_value):
+    key = (execution_model, _provider_func)
 
+    if key == (SYNC, RETURN):
 
-@pytest.fixture
-def dependency_value(dependency):
-    return dependency[1]
+        def provider(self, length=1) -> dep_type:
+            return dep_value * length
+
+    elif key == (SYNC, CONTEXT):
+
+        @contextlib.contextmanager
+        def provider(self, length=1) -> dep_type:
+            yield dep_value * length
+
+    elif key == (ASYNC, RETURN):
+
+        async def provider(self, length=1) -> dep_type:
+            await no_op()
+            return dep_value * length
+
+    elif key == (ASYNC, CONTEXT):
+
+        @contextlib.asynccontextmanager
+        async def provider(self, length=1) -> dep_type:
+            await no_op()
+            yield dep_value * length
+
+    else:
+        raise RuntimeError()
+
+    return provider
 
 
 @pytest.fixture(
-    params=[
-        "inspect",
-        "decorator",
-        "context_inspect",
-        "context_decorator",
-        "register_inspect",
-        "register",
-    ]
+    params=[INSPECT, DECORATOR, REGISTER, REGISTER_INSPECT],
+    ids=lambda x: f"Wrapper:{x}",
 )
-def module_cls(request, dependency_type, dependency_value):
-    if request.param == "inspect":
-
-        class MyModule(Module):
-            @provider
-            def provide_inspect(self, multiplier=1) -> dependency_type:
-                return dependency_value * multiplier
-
-            @provider
-            async def provide_inspect_async(self, multiplier=1) -> dependency_type:
-                return dependency_value * multiplier
-
-    elif request.param == "decorator":
-
-        class MyModule(Module):
-            @provides(dependency_type)
-            def provide_decorator(self, multiplier=1):
-                return dependency_value * multiplier
-
-            @provides(dependency_type)
-            async def provide_decorator_async(self, multiplier=1):
-                return dependency_value * multiplier
-
-    elif request.param == "context_inspect":
-
-        class MyModule(Module):
-            @contextprovider
-            @contextlib.contextmanager
-            def provide_context_inspect(self, multiplier=1) -> dependency_type:
-                yield dependency_value * multiplier
-
-            @contextprovider
-            @contextlib.asynccontextmanager
-            async def provide_context_inspect_async(
-                self, multiplier=1
-            ) -> dependency_type:
-                yield dependency_value * multiplier
-
-    elif request.param == "context_decorator":
-
-        class MyModule(Module):
-            @provides(dependency_type, context=True)
-            @contextlib.contextmanager
-            def provide_context_decorator(self, multiplier=1):
-                yield dependency_value * multiplier
-
-            @provides(dependency_type, context=True)
-            @contextlib.asynccontextmanager
-            async def provide_context_decorator_async(self, multiplier=1):
-                yield dependency_value * multiplier
-
-    elif request.param == "register_inspect":
-
-        class MyModule(Module):
-            pass
-
-        def provide_register_inspect(injector, multiplier=1) -> dependency_type:
-            return dependency_value * multiplier
-
-        MyModule.register(provide_register_inspect)
-
-        async def provide_register_inspect_async(
-            injector, multiplier=1
-        ) -> dependency_type:
-            return dependency_value * multiplier
-
-        MyModule.register(provide_register_inspect_async)
-
-    elif request.param == "register":
-
-        class MyModule(Module):
-            pass
-
-        def provide_register(injector, multiplier=1):
-            return dependency_value * multiplier
-
-        MyModule.register(provide_register, dependency_type)
-
-        async def provide_register_async(injector, multiplier=1):
-            return dependency_value * multiplier
-
-        MyModule.register(provide_register_async, dependency_type)
-
-    else:
-        raise RuntimeError("Cannot do " + request.param)
-
-    return MyModule
+def _provider_wrapper(request):
+    return request.param
 
 
 @pytest.fixture
-def module(module_cls):
-    return module_cls()
+def module(_provider_wrapper, provider_func, _provider_func, dep_type):
+    if _provider_func == RETURN:
+        provider = diana.provider
+        provides = diana.provides(dep_type)
+        context = False
+    elif _provider_func == CONTEXT:
+        provider = diana.contextprovider
+        provides = diana.provides(dep_type, context=True)
+        context = True
+    else:
+        raise RuntimeError(_provider_func)
+
+    if _provider_wrapper in (INSPECT, DECORATOR):
+        if _provider_wrapper == INSPECT:
+            wrapped_func = provider(provider_func)
+
+        elif _provider_wrapper == DECORATOR:
+            wrapped_func = provides(provider_func)
+
+        module = type("TestModule", (diana.Module,), {"test_provider": wrapped_func})
+
+        return module()
+
+    elif _provider_wrapper in (REGISTER, REGISTER_INSPECT):
+        module = diana.Module()
+
+        if _provider_wrapper == REGISTER:
+            module.register(provider_func, dep_type, context=context)
+
+        elif _provider_wrapper == REGISTER_INSPECT:
+            module.register(provider_func, context=context)
+
+        return module
+
+    else:
+        raise RuntimeError(_provider_wrapper)
 
 
 @pytest.fixture
 def injector(module):
-    injector = Injector()
+    injector = diana.Injector()
     injector.load(module)
     return injector
 
 
-@pytest.fixture(params=["inspect", "explicit"])
-def target_style(request):
-    return request.param
-
-
-@pytest.fixture(params=["", "param"])
-def target_param(request):
+@pytest.fixture(params=[RETURN, GENERATOR], ids=lambda x: f"Target:{x}")
+def _target_func(request):
     return request.param
 
 
 @pytest.fixture
-def inject_target(
-    target_style, target_param, injector, dependency_type, dependency_value
-):
-    key = (target_style, target_param)
+def target_func(_target_func, execution_model, dep_type):
+    key = (execution_model, _target_func)
 
-    if key == ("inspect", ""):
+    if key == (SYNC, RETURN):
 
-        @injector
-        def target(*, value: dependency_type) -> dependency_type:
+        def target(*, value: dep_type):
             return value
 
-    elif key == ("explicit", ""):
+    elif key == (SYNC, GENERATOR):
 
-        @injector.inject(value=dependency_type)
-        def target(*, value) -> dependency_type:
+        def target(*, value: dep_type):
+            yield value
+
+    elif key == (ASYNC, RETURN):
+
+        async def target(*, value: dep_type):
+            await no_op()
             return value
 
-    elif key == ("inspect", "param"):
+    elif key == (ASYNC, GENERATOR):
 
-        @injector
-        @injector.param("value", multiplier=5)
-        def target(*, value: dependency_type) -> dependency_type:
-            return value
-
-    elif key == ("explicit", "param"):
-
-        @injector.inject(value=dependency_type)
-        @injector.param("value", multiplier=5)
-        def target(*, value: dependency_type):
-            return value
+        async def target(*, value: dep_type):
+            await no_op()
+            yield value
 
     else:
-        raise RuntimeError("Cannot do " + key)
+        raise RuntimeError(key)
 
     return target
+
+
+@pytest.fixture(params=[INSPECT, EXPLICIT], ids=lambda x: f"Inject:{x}")
+def inject_wrapper(request, injector, dep_type):
+    if request.param == INSPECT:
+        return injector
+
+    elif request.param == EXPLICIT:
+        return injector.inject(value=dep_type)
+
+    else:
+        raise RuntimeError()
 
 
 @pytest.fixture
-def inject_target_async(
-    target_style, target_param, injector, dependency_type, dependency_value
-):
-    key = (target_style, target_param)
+def target(target_func, inject_wrapper):
+    return inject_wrapper(target_func)
 
-    if key == ("inspect", ""):
 
-        @injector
-        async def target(*, value: dependency_type) -> dependency_type:
-            return value
+@pytest.mark.parametrize("execution_model", [SYNC], indirect=True)
+def test_sync(target, dep_value, _target_func):
+    if _target_func == RETURN:
+        assert target() == dep_value
 
-    elif key == ("explicit", ""):
-
-        @injector.inject(value=dependency_type)
-        async def target(*, value) -> dependency_type:
-            return value
-
-    elif key == ("inspect", "param"):
-
-        @injector
-        @injector.param("value", multiplier=5)
-        async def target(*, value: dependency_type) -> dependency_type:
-            return value
-
-    elif key == ("explicit", "param"):
-
-        @injector.inject(value=dependency_type)
-        @injector.param("value", multiplier=5)
-        async def target(*, value: dependency_type):
-            return value
+    elif _target_func == GENERATOR:
+        assert next(target()) == dep_value
 
     else:
-        raise RuntimeError("Cannot do " + key)
-
-    return target
-
-
-def test_inject(dependency_value, inject_target, target_param):
-    if target_param:
-        expected_value = dependency_value * 5
-    else:
-        expected_value = dependency_value
-
-    assert inject_target() == expected_value
-
-
-def test_use_provided_value(inject_target):
-    value = mock.sentinel.EXPECTED_VALUE
-    assert inject_target(value=value) == value
+        raise RuntimeError()
 
 
 @pytest.mark.asyncio
-async def test_inject_async(dependency_value, inject_target_async, target_param):
-    if target_param:
-        expected_value = dependency_value * 5
-    else:
-        expected_value = dependency_value
+@pytest.mark.parametrize("execution_model", [ASYNC], indirect=True)
+async def test_async(target, dep_value, _target_func):
+    if _target_func == RETURN:
+        assert (await target()) == dep_value
 
-    assert (await inject_target_async()) == expected_value
+    elif _target_func == GENERATOR:
+        async for x in target():
+            assert x == dep_value
+
+    else:
+        raise RuntimeError()
+

@@ -1,6 +1,20 @@
 from diana.module import Module, provider, provides
 
 
+def test_register():
+    class MyModule(Module):
+        pass
+
+    def p_int(module) -> int:
+        return 1
+
+    def p_str(module):
+        return "string"
+
+    MyModule.register(p_int)
+    MyModule.register(p_str, str)
+
+
 def test_provider():
     class MyModule(Module):
         @provider

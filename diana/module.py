@@ -2,6 +2,8 @@ import inspect
 import asyncio
 import typing as t
 
+from .util import isasync
+
 
 Feature = t.TypeVar("Feature")
 SyncFeatureProvider = t.Callable[..., Feature]
@@ -18,23 +20,12 @@ if t.TYPE_CHECKING:
     from .injector import Injector  # noqa
 
 
-def _isasync(func):
-    wrapped = getattr(func, "__wrapped__", None)
-    return (
-        asyncio.iscoroutinefunction(func)
-        or inspect.isasyncgenfunction(func)
-        or asyncio.iscoroutinefunction(wrapped)
-        or inspect.isasyncgenfunction(wrapped)
-        or hasattr(func, "__aenter__")
-    )
-
-
 def mark_provides(
     func: FeatureProvider, feature: Feature, context: bool = False
 ) -> None:
     func.__provides__ = feature
     func.__contextprovider__ = context
-    func.__asyncproider__ = _isasync(func)
+    func.__asyncproider__ = isasync(func)
 
 
 def provider(func: FeatureProvider, context: bool = False) -> FeatureProvider:
@@ -114,7 +105,7 @@ class Module(metaclass=ModuleMeta):
         else:
             provider(func, context)
 
-        if asyncio.iscoroutinefunction(func):
+        if isasync(func):
             cls.async_providers[func.__provides__] = func
         else:
             cls.providers[func.__provides__] = func

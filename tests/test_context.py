@@ -7,6 +7,11 @@ import diana
 
 
 State = t.NewType("State", dict)
+AsyncState = t.NewType("AsyncState", dict)
+
+
+async def no_op():
+    pass
 
 
 @pytest.fixture
@@ -24,8 +29,9 @@ def module():
 
         @diana.contextprovider
         @contextlib.asynccontextmanager
-        async def provide_async(self) -> State:
+        async def provide_async(self) -> AsyncState:
             self.state["count"] += 1
+            await no_op()
             yield self.state
             self.state["count"] -= 1
 
@@ -50,7 +56,7 @@ def test_within_context(injector):
 @pytest.mark.asyncio
 async def test_within_context_async(injector):
     @injector
-    async def uses_state(*, state: State):
+    async def uses_state(*, state: AsyncState):
         assert state["count"] != 0
 
     await uses_state()

@@ -3,8 +3,10 @@ import functools
 import asyncio
 import typing as t
 import contextlib
+import types
 
 from .module import Module
+from .util import isasync
 
 
 FuncType = t.Callable[..., t.Any]
@@ -83,7 +85,7 @@ class Injector(object):
         if hasattr(func, "__dependencies__"):
             return func
 
-        if asyncio.iscoroutinefunction(func):
+        if isasync(func):
             klass = self._async_dep
         else:
             klass = self._sync_dep
@@ -300,7 +302,20 @@ class AsyncDependencies(Dependencies):
 
         return output
 
-    async def call_injected(self, *args, **kwargs) -> t.Any:
+    def call_injected(self, *args, **kwargs) -> t.Any:
+        if not asyncio.iscoroutinefunction(self.func):
+            # We can assume that a non-coroutinefunction is actually a generator
+            return self._yield_injected(*args, **kwargs)
+        else:
+            return self._return_injected(*args, **kwargs)
+
+    async def _return_injected(self, *args, **kwargs) -> t.Any:
         async with contextlib.AsyncExitStack() as stack:
             kwargs.update(await self.resolve_dependencies(kwargs, stack))
             return await self.func(*args, **kwargs)
+
+    async def _yield_injected(self, *args, **kwargs) -> t.Any:
+        async with contextlib.AsyncExitStack() as stack:
+            kwargs.update(await self.resolve_dependencies(kwargs, stack))
+            async for x in self.func(*args, **kwargs):
+                yield x

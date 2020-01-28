@@ -108,7 +108,9 @@ def module(_provider_wrapper, provider_func, _provider_func, dep_type):
         return module()
 
     elif _provider_wrapper in (REGISTER, REGISTER_INSPECT):
-        module = diana.Module()
+
+        class module(diana.Module):
+            pass
 
         if _provider_wrapper == REGISTER:
             module.register(provider_func, dep_type, context=context)
@@ -116,7 +118,7 @@ def module(_provider_wrapper, provider_func, _provider_func, dep_type):
         elif _provider_wrapper == REGISTER_INSPECT:
             module.register(provider_func, context=context)
 
-        return module
+        return module()
 
     else:
         raise RuntimeError(_provider_wrapper)

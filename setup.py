@@ -27,7 +27,7 @@ setup(
     url="http://github.com/xlevus/python-diana",
     packages=["diana"],
     license="MIT",
-    python_requires=">3.6.*, <4",
+    python_requires=">3.6, <4",
     tests_require=["pytest", "mock"],
     classifiers=[
         "Development Status :: 4 - Beta",
